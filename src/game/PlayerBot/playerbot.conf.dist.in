@@ -9,7 +9,7 @@ ConfVersion=2018101401
 # PLAYERBOTAI CONFIGURATION
 #
 #    PlayerbotAI.DisableBots
-#        Disable the bot system
+#        禁用bot系统
 #        Default: 0 - off
 #                 1 - on
 #
@@ -24,26 +24,25 @@ ConfVersion=2018101401
 #        Default: 0.5 / 1.0
 #
 #    PlayerbotAI.MaxNumBots
-#        Limits the number of bots per account (Max 9)
+#        限制每个账号的机器人数量(最多9个)
 #        Default: 9
 #
 #    PlayerbotAI.RestrictBotLevel
-#        Restrict the allowed bot level (Current Max 80)
-#        Default: 80
+#        限制允许的机器人等级(当前最大70)
+#        Default: 70
 #
 #    PlayerbotAI.BotguyQuests
-#        List of Quest ids, any of which, once completed will enable botguy menu on NPCs
-#        List must be enclosed in double quotes ("") and multiple Quest Ids separated by a delimiter(,)
+#        任务id列表，其中任何一个，一旦完成将启用npc上的botguy菜单，
+#        必须包含在双引号("")中，多个任务id由一个分隔符(，)分隔
 #        Example: "805,383,2160,54,8350,9313,1656,2159"
-#        Default: "" no quest restriction, memu always displayed by NPCs
+#        Default: "" 没有任务限制，memu总是由npc显示
 #
 #    PlayerbotAI.BotguyCost
-#        Cost (Copper coins) levied on summoning a bot
-#        If player has the cost, botguy menu will be displayed by NPCs
-#        Negative value will disable botguy menu
+#        召唤机器人时所征收的费用(铜币)如果玩家有费用，
+#        npc将显示Bot菜单。负值将禁用Bot菜单
 #                -1 - Botguy menu off
-#        Default: 0 - no cost, menu always displayed by NPCs
-#                 1...2147483648 cost (in copper) for summoning one bot
+#        Default: 0 - 免费，菜单总是由npc显示
+#                 1...2147483648 召唤一个机器人的成本(铜单位)
 #
 #    PlayerbotAI.Collect.Combat
 #    PlayerbotAI.Collect.Quest
@@ -66,7 +65,7 @@ ConfVersion=2018101401
 #        Default: 25 (cannot be more than DistanceMax)
 #
 #    PlayerbotAI.SellGarbage
-#        Allow bots to automatically sell all [GRAY|POOR] quality items as the player activates vendor
+#        允许机器人自动出售所有[灰色|差]质量的物品，作为玩家激活供应商
 #        Default: 0 - off
 #                 1 - on
 #    PlayerbotAI.SellAll.LevelDiff
@@ -81,7 +80,7 @@ PlayerbotAI.DebugWhisper = 0
 PlayerbotAI.FollowDistanceMin = 0.5
 PlayerbotAI.FollowDistanceMax = 1.0
 PlayerbotAI.MaxNumBots = 9
-PlayerbotAI.RestrictBotLevel = 80
+PlayerbotAI.RestrictBotLevel = 70
 PlayerbotAI.BotguyQuests = ""
 PlayerbotAI.BotguyCost = 0
 PlayerbotAI.Collect.Combat = 1
@@ -92,5 +91,5 @@ PlayerbotAI.Collect.Skin = 1
 PlayerbotAI.Collect.Objects = 1
 PlayerbotAI.Collect.DistanceMax = 50
 PlayerbotAI.Collect.Distance = 25
-PlayerbotAI.SellGarbage = 0
+PlayerbotAI.SellGarbage = 1
 PlayerbotAI.SellAll.LevelDiff = 10

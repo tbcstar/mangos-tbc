@@ -1,5 +1,5 @@
 ############################################
-# MaNGOS realmd configuration file         #
+# MaNGOS realmd配置文件         #
 ############################################
 
 [RealmdConf]
@@ -17,118 +17,118 @@ ConfVersion=2010062001
 #                       Unix sockets: experimental, not tested
 #
 #    LogsDir
-#         Logs directory setting.
-#         Important: Logs dir must exists, or all logs be disable
+#         日志目录设置。
+#         Important: 必须存在Logs目录，否则禁用所有日志
 #         Default: "" - no log directory prefix. if used log names aren't absolute paths
 #                       then logs will be stored in the current directory of the running program.
 #
 #    MaxPingTime
-#         Settings for maximum database-ping interval (minutes between pings)
+#         设置最大数据库ping间隔(ping之间的分钟)
 #
 #    RealmServerPort
-#         Port on which the server will listen
+#         服务器将侦听的端口
 #
 #    BindIP
-#         Bind Realm Server to specific IP address
-#         This option is useful for running multiple worldd/realmd instances
-#         on different IP addresses using default ports.
-#         DO NOT CHANGE THIS UNLESS YOU _REALLY_ KNOW WHAT YOU'RE DOING
+#         将realmd服务器绑定到特定的IP地址
+#         这个选项对于运行多个worldd/realmd实例非常有用
+#         在不同的IP地址使用默认端口。
+#         除非你真的知道你在做什么，否则不要改变这个
 #
 #    PidFile
-#        Realmd daemon PID file
-#        Default: ""             - do not create PID file
-#                 "./realmd.pid" - create PID file (recommended name)
+#        Realmd守护进程PID文件
+#        Default: ""             - 不创建PID文件
+#                 "./realmd.pid" - 创建PID文件(推荐的名称)
 #
 #    LogLevel
-#        Server console level of logging
+#        服务器控制台级别的日志记录
 #        0 = Minimum; 1 = Error; 2 = Detail; 3 = Full/Debug
 #        Default: 0
 #
 #    LogTime
-#        Include time in server console output [hh:mm:ss]
+#        包括时间在服务器控制台输出[hh:mm:ss]
 #        Default: 0 (no time)
 #                 1 (print time)
 #
 #    LogFile
 #        Logfile name
 #        Default: "Realmd.log"
-#                 "" - empty name disable creating log file
+#                 "" - 空名称禁止创建日志文件
 #
 #    LogTimestamp
-#        Logfile with timestamp of server start in name
-#        Default: 0 - no timestamp in name
+#        名称中带有服务器启动时间戳的日志文件
+#        Default: 0 - 名称中没有时间戳
 #                 1 - add timestamp in name in form Logname_YYYY-MM-DD_HH-MM-SS.Ext for Logname.Ext
 #
 #    LogFileLevel
-#        Server file level of logging
+#        服务器文件级别的日志记录
 #        0 = Minimum; 1 = Error; 2 = Detail; 3 = Full/Debug
 #        Default: 0
 #
 #    LogColors
-#        Color for messages (format "normal_color details_color debug_color error_color)
-#        Colors: 0 - BLACK, 1 - RED, 2 - GREEN,  3 - BROWN, 4 - BLUE, 5 - MAGENTA, 6 -  CYAN, 7 - GREY,
-#                8 - YELLOW, 9 - LRED, 10 - LGREEN, 11 - LBLUE, 12 - LMAGENTA, 13 - LCYAN, 14 - WHITE
+#        消息的颜色(格式 "normal_color details_color debug_color error_color)
+#        Colors: 0 - 黑色, 1 - 红色, 2 - 绿色,  3 - 棕色, 4 - 蓝色, 5 - 洋红色, 6 -  青色, 7 - 灰色,
+#                8 - 黄色, 9 - LRED, 10 - LGREEN, 11 - 蓝色, 12 - LMAGENTA, 13 - LCYAN, 14 - WHITE
 #        Default: "" - none colors
 #                 "13 7 11 9" - for example :)
 #
 #    UseProcessors
-#        Used processors mask for multi-processors system (Used only at Windows)
+#        用于多处理器系统的已使用处理器掩码(仅用于Windows)
 #        Default: 0 (selected by OS)
 #                 number (bitmask value of selected processors)
 #
 #    ProcessPriority
-#        Process proirity setting (Used only at Windows)
+#        进程优先级设置(仅在Windows中使用)
 #        Default: 1 (HIGH)
 #                 0 (Normal)
 #
 #    WaitAtStartupError
-#        After startup error report wait <Enter> or some time before continue (and possible close console window)
+#        在启动错误报告后等待<Enter>或继续之前的一段时间(可能关闭控制台窗口)
 #                 -1 (wait until <Enter> press)
 #        Default:  0 (not wait)
 #                  N (>0, wait N secs)
 #
 #    RealmsStateUpdateDelay
-#        Realm list Update up delay (updated at realm list request if delay expired).
+#        Realm list更新延迟(如果延迟过期，则在Realm list请求时更新)。
 #        Default: 20
 #                 0  (Disabled)
 #
 #    StrictVersionCheck
-#        Description: Prevent modified clients from connnecting
+#        描述:防止修改客户端连接
 #        Default:     0 - (Disabled)
 #                     1 - (Enabled)
 #
 #    WrongPass.MaxCount
-#        Number of login attemps with wrong password before the account or IP is banned
+#        帐号或IP被禁用之前，使用错误密码进行尝试的次数
 #        Default: 0  (Never ban)
 #
 #    WrongPass.BanTime
-#        Duration of the ban in seconds (0 means permanent ban)
+#        禁止持续时间(秒)(0表示永久禁止)
 #        Default: 600
 #
 #    WrongPass.BanType
-#        Ban the IP or account on which login is attempted
+#        禁止试图登录的IP或帐户
 #        Default: 0 (Ban IP)
 #                 1 (Ban Account)
 #
 ###################################################################################################################
 
-LoginDatabaseInfo = "127.0.0.1;3306;mangos;mangos;tbcrealmd"
-LogsDir = ""
+LoginDatabaseInfo = "127.0.0.1;3310;root;A111111a;realmd"
+LogsDir = "/home/server/log"
 MaxPingTime = 30
 RealmServerPort = 3724
 BindIP = "0.0.0.0"
-PidFile = ""
-LogLevel = 0
-LogTime = 0
+PidFile = "./realmd.pid"
+LogLevel = 3
+LogTime = 1
 LogFile = "Realmd.log"
-LogTimestamp = 0
-LogFileLevel = 0
-LogColors = ""
+LogTimestamp = 1
+LogFileLevel = 3
+LogColors = "0 6 4 3 1 1 2 7 5 0 4 0 1 3 2 4 0"
 UseProcessors = 0
 ProcessPriority = 1
-WaitAtStartupError = 0
+WaitAtStartupError = -1
 RealmsStateUpdateDelay = 20
-StrictVersionCheck = 0
-WrongPass.MaxCount = 0
+StrictVersionCheck = 1
+WrongPass.MaxCount = 10
 WrongPass.BanTime = 600
 WrongPass.BanType = 0
