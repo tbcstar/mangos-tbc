@@ -366,6 +366,8 @@ bool Unit::CanAttack(const Unit* unit) const
     MANGOS_ASSERT(unit)
 
     // Original logic
+		if (IsInCombat() && !unit)
+			return false;
 
     // TBC+: Arena Tournament commenatator
     if (GetTypeId() == TYPEID_PLAYER && static_cast<const Player*>(this)->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_COMMENTATOR))
