@@ -361,8 +361,8 @@ void Object::BuildMovementUpdate(ByteBuffer* data, uint8 updateFlags) const
     if (updateFlags & UPDATEFLAG_TRANSPORT)
     {
         GameObject const* go = static_cast<GameObject const*>(this);
-        if (go && go->IsMoTransport())
-            *data << uint32(static_cast<Transport const*>(go)->GetPathProgress());
+        if (go && go->IsTransport())
+            *data << uint32(static_cast<GenericTransport const*>(go)->GetPathProgress());
         else
             *data << uint32(go->GetMap()->GetCurrentMSTime());
     }
@@ -2019,6 +2019,20 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map)
 Creature* WorldObject::SummonCreature(uint32 id, float x, float y, float z, float ang, TempSpawnType spwtype, uint32 despwtime, bool asActiveObject, bool setRun, uint32 pathId, uint32 faction, uint32 modelId, bool spawnCounting, bool forcedOnTop)
 {
     return WorldObject::SummonCreature(TempSpawnSettings(this, id, x, y, z, ang, spwtype, despwtime, asActiveObject, setRun, pathId, faction, modelId, spawnCounting, forcedOnTop), GetMap());
+}
+
+GameObject* WorldObject::SummonGameObject(uint32 dbGuid, Map* map)
+{
+    GameObjectData const* data = sObjectMgr.GetGOData(dbGuid);
+    MANGOS_ASSERT(data);
+    GameObject* gameobject = GameObject::CreateGameObject(data->id);
+    if (!gameobject->LoadFromDB(dbGuid, map, map->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT)))
+    {
+        delete gameobject;
+        return nullptr;
+    }
+    map->Add(gameobject);
+    return gameobject;
 }
 
 // how much space should be left in front of/ behind a mob that already uses a space
