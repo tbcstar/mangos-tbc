@@ -31,6 +31,8 @@
 
 #include "Movement/MoveSpline.h"
 
+#include <G3D/Quat.h>
+
 void MapManager::LoadTransports()
 {
     sTransportMgr.LoadTransportTemplates();
@@ -211,6 +213,8 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z, fl
     Map* oldMap = GetMap();
     Relocate(x, y, z);
 
+    bool mapChange = GetMapId() != newMapid;
+
     auto& passengers = GetPassengers();
     for (m_passengerTeleportIterator = passengers.begin(); m_passengerTeleportIterator != passengers.end();)
     {
@@ -221,18 +225,18 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z, fl
 
         Unit* passengerUnit = static_cast<Unit*>(obj);
 
-        float destX, destY, destZ, destO;
-        destX = passengerUnit->GetTransOffsetX();
-        destY = passengerUnit->GetTransOffsetY();
-        destZ = passengerUnit->GetTransOffsetZ();
-        destO = passengerUnit->GetTransOffsetO();
-        CalculatePassengerPosition(destX, destY, destZ, &destO, x, y, z, o);
+        Position pos = passengerUnit->m_movementInfo.GetTransportPos();
 
         switch (obj->GetTypeId())
         {
             case TYPEID_UNIT:
             {
-                RemovePassenger(passengerUnit);
+                if (mapChange)
+                {
+                    RemovePassenger(passengerUnit);
+                    if (obj->IsCreature() && !static_cast<Creature*>(obj)->IsPet())
+                        passengerUnit->AddObjectToRemoveList();
+                }
                 break;
             }
             case TYPEID_PLAYER:
@@ -240,7 +244,7 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z, fl
                 Player* player = static_cast<Player*>(obj);
                 if (player->IsDead() && !player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
                     player->ResurrectPlayer(1.0);
-                player->TeleportTo(newMapid, destX, destY, destZ, destO, TELE_TO_NOT_LEAVE_TRANSPORT);
+                player->TeleportTo(newMapid, pos.x, pos.y, pos.z, pos.o, TELE_TO_NOT_LEAVE_TRANSPORT, nullptr, this);
                 break;
             }
         }
@@ -249,7 +253,7 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z, fl
     // we need to create and save new Map object with 'newMapid' because if not done -> lead to invalid Map object reference...
     // player far teleport would try to create same instance, but we need it NOW for transport...
     // correct me if I'm wrong O.o
-    if (GetMapId() != newMapid)
+    if (mapChange)
     {
         oldMap->GetMessager().AddMessage([transport = this, newMapid](Map* map)
         {
@@ -469,7 +473,6 @@ void ElevatorTransport::Update(const uint32 /*diff*/)
     if (nodeNext && nodePrev)
     {
         m_currentSeg = nodePrev->TimeSeg;
-
         G3D::Vector3 posPrev = G3D::Vector3(nodePrev->X, nodePrev->Y, nodePrev->Z);
         G3D::Vector3 posNext = G3D::Vector3(nodeNext->X, nodeNext->Y, nodeNext->Z);
         G3D::Vector3 currentPos;
@@ -486,6 +489,10 @@ void ElevatorTransport::Update(const uint32 /*diff*/)
             currentPos += posPrev;
         }
 
+        auto data = GetLocalRotation();
+        G3D::Quat rotation(data.x, data.y, data.z, data.w);
+        currentPos = currentPos * rotation;
+        currentPos.y = -currentPos.y; // magical sign flip but it works - vanilla/tbc only
         currentPos += G3D::Vector3(m_stationaryPosition.x, m_stationaryPosition.y, m_stationaryPosition.z);
 
         GetMap()->GameObjectRelocation(this, currentPos.x, currentPos.y, currentPos.z, GetOrientation());
