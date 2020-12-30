@@ -341,6 +341,10 @@ AccountData = 0
 #        Log file of DB errors detected at server run
 #        Default: "DBErrors.log"
 #
+#    ElunaErrorLogFile
+#        服务器运行时检测到的Eluna错误的日志文件
+#        Default: "ElunaErrors.log"
+#
 #    EventAIErrorLogFile
 #        Log file of EventAI errors detected at server run
 #        Default: "EventAIErrors.log"
@@ -419,6 +423,7 @@ LogFilter_SpellCast = 0
 WorldLogFile = ""
 WorldLogTimestamp = 0
 DBErrorLogFile = "DBErrors.log"
+ElunaErrorLogFile = "ElunaErrors.log"
 EventAIErrorLogFile = "EventAIErrors.log"
 CharLogFile = "Char.log"
 CharLogTimestamp = 0
@@ -922,11 +927,6 @@ TalentsInspecting = 1
 ###################################################################################################################
 # CREATURE AND GAMEOBJECT SETTINGS
 #
-#    ThreatRadius
-#        Radius for creature to evade after being pulled away from combat start point
-#        If ThreatRadius is less than creature aggro radius then aggro radius will be used
-#        Default: 100 yards
-#
 #    Rate.Creature.Aggro
 #        Aggro radius percent or off.
 #        Default: 1   - 100%
@@ -1031,7 +1031,6 @@ TalentsInspecting = 1
 #
 ###################################################################################################################
 
-ThreatRadius = 100
 Rate.Creature.Aggro = 1
 CreatureRespawnAggroDelay = 5000
 CreatureFamilyFleeAssistanceRadius = 30
@@ -1783,6 +1782,30 @@ SOAP.Port = 7878
 CharDelete.Method = 0
 CharDelete.MinLevel = 0
 CharDelete.KeepDays = 30
+
+###################################################################################################################
+#  ELUNA SETTINGS
+#
+#    Eluna.Enabled
+#        Enable Eluna LuaEngine
+#        Default: 1 (Enabled)
+#                 0 (Disabled)
+#
+#   Eluna.TraceBack
+#       Description: Sets whether to use debug.traceback function on a lua error or not.
+#                    Notice that you can redefine the function.
+#       Default:    false - (use default error output)
+#                   true  - (use debug.traceback function)
+#
+#   Eluna.ScriptPath
+#       说明:设置加载脚本的脚本文件夹的位置路径可以是相对的也可以是绝对的。
+#       Default:    "lua_scripts"
+#
+###################################################################################################################
+
+Eluna.Enabled = 1
+Eluna.TraceBack = false
+Eluna.ScriptPath = "lua_scripts"
 
 ###################################################################################################################
 # METRICS CONFIGURATION

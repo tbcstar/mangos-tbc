@@ -29,6 +29,8 @@
 #include <thread>
 #include <cstdarg>
 
+#include <boost/stacktrace.hpp>
+
 INSTANTIATE_SINGLETON_1(Log);
 
 LogFilterData logFilterData[LOG_FILTER_COUNT] =
@@ -66,7 +68,7 @@ enum LogType
 const int LogType_count = int(LogError) + 1;
 
 Log::Log() :
-    raLogfile(nullptr), logfile(nullptr), gmLogfile(nullptr), charLogfile(nullptr), dberLogfile(nullptr),
+    raLogfile(nullptr), logfile(nullptr), gmLogfile(nullptr), charLogfile(nullptr), dberLogfile(nullptr), elunaErrLogfile(nullptr),
     eventAiErLogfile(nullptr), scriptErrLogFile(nullptr), worldLogfile(nullptr), customLogFile(nullptr), m_colored(false), m_includeTime(false), m_gmlog_per_account(false), m_scriptLibName(nullptr)
 {
     Initialize();
@@ -521,6 +523,81 @@ void Log::outErrorDb(const char* err, ...)
 
         fprintf(dberLogfile, "\n");
         fflush(dberLogfile);
+    }
+
+    fflush(stderr);
+}
+
+void Log::outErrorEluna()
+{
+    if (m_includeTime)
+        outTime();
+
+    fprintf(stderr, "\n");
+
+    if (logfile)
+    {
+        outTimestamp(logfile);
+        fprintf(logfile, "ERROR Eluna\n");
+        fflush(logfile);
+    }
+
+    if (elunaErrLogfile)
+    {
+        outTimestamp(elunaErrLogfile);
+        fprintf(elunaErrLogfile, "\n");
+        fflush(elunaErrLogfile);
+    }
+
+    fflush(stderr);
+}
+
+void Log::outErrorEluna(const char* err, ...)
+{
+    if (!err)
+        return;
+
+    if (m_colored)
+        SetColor(false, m_colors[LogError]);
+
+    if (m_includeTime)
+        outTime();
+
+    va_list ap;
+
+    va_start(ap, err);
+    vutf8printf(stderr, err, &ap);
+    va_end(ap);
+
+    if (m_colored)
+        ResetColor(false);
+
+    fprintf(stderr, "\n");
+
+    if (logfile)
+    {
+        outTimestamp(logfile);
+        fprintf(logfile, "ERROR Eluna: ");
+
+        va_start(ap, err);
+        vfprintf(logfile, err, ap);
+        va_end(ap);
+
+        fprintf(logfile, "\n");
+        fflush(logfile);
+    }
+
+    if (elunaErrLogfile)
+    {
+        outTimestamp(elunaErrLogfile);
+
+        va_list ap;
+        va_start(ap, err);
+        vfprintf(elunaErrLogfile, err, ap);
+        va_end(ap);
+
+        fprintf(elunaErrLogfile, "\n");
+        fflush(elunaErrLogfile);
     }
 
     fflush(stderr);
@@ -1099,4 +1176,25 @@ void script_error_log(const char* str, ...)
     va_end(ap);
 
     sLog.outErrorScriptLib("%s", buf);
+}
+
+void Log::traceLog()
+{
+    std::lock_guard<std::mutex> guard(m_worldLogMtx);
+    if (customLogFile)
+    {
+        fprintf(customLogFile, "%s\n", GetTraceLog().data());
+        fflush(customLogFile);
+    }
+
+    fflush(stdout);
+}
+
+// has to be in a locked enviroment on linux
+std::string Log::GetTraceLog()
+{
+    std::lock_guard<std::mutex> guard(m_traceLogMtx);
+    std::stringstream ss;
+    ss << boost::stacktrace::stacktrace(); // warning - not async-safe - hence the locking
+    return ss.str();
 }

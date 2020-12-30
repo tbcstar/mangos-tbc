@@ -37,6 +37,7 @@
 #include "Social/SocialMgr.h"
 #include "GMTickets/GMTicketMgr.h"
 #include "Loot/LootMgr.h"
+#include "LuaEngine.h"
 
 #include <mutex>
 #include <deque>
@@ -94,7 +95,7 @@ WorldSession::WorldSession(uint32 id, WorldSocket* sock, AccountTypes sec, uint8
     LookingForGroup_auto_join(false), LookingForGroup_auto_add(true), m_muteTime(mute_time),
     _player(nullptr), m_Socket(sock ? sock->shared<WorldSocket>() : nullptr),
     m_requestSocket(nullptr), m_sessionState(WORLD_SESSION_STATE_CREATED),
-    _security(sec), _accountId(id), m_expansion(expansion), _logoutTime(0), m_playerSave(true),
+    _security(sec), _accountId(id), m_expansion(expansion), m_orderCounter(0), _logoutTime(0), m_playerSave(true),
     m_inQueue(false), m_playerLoading(false), m_playerLogout(false), m_playerRecentlyLogout(false),
     m_sessionDbcLocale(sWorld.GetAvailableDbcLocale(locale)), m_sessionDbLocaleIndex(sObjectMgr.GetStorageLocaleIndexFor(locale)),
     m_latency(0), m_tutorialState(TUTORIALDATA_UNCHANGED),
@@ -376,8 +377,11 @@ bool WorldSession::Update(uint32 diff)
                     // lag can cause STATUS_LOGGEDIN opcodes to arrive after the player started a transfer
 
 #ifdef BUILD_PLAYERBOT
-                    if (_player && _player->GetPlayerbotMgr())
-                        _player->GetPlayerbotMgr()->HandleMasterIncomingPacket(*packet);
+					if (_player) {
+						if (_player->GetPlayerbotMgr()) {
+							_player->GetPlayerbotMgr()->HandleMasterIncomingPacket(*packet);
+						}
+					}
 #endif
                     break;
                 case STATUS_LOGGEDIN_OR_RECENTLY_LOGGEDOUT:
@@ -710,6 +714,8 @@ void WorldSession::LogoutPlayer()
         uint32 guid = _player->GetGUIDLow();
 #endif
 
+        ///- used by eluna
+        sEluna->OnLogout(_player);
         ///- Remove the player from the world
         // the player may not be in the world when logging out
         // e.g if he got disconnected during a transfer to another map
@@ -1124,6 +1130,8 @@ void WorldSession::SendTransferAborted(uint32 mapid, uint8 reason, uint8 arg) co
 
 void WorldSession::ExecuteOpcode(OpcodeHandler const& opHandle, WorldPacket& packet)
 {
+    if (!sEluna->OnPacketReceive(this, packet))
+        return;
     // need prevent do internal far teleports in handlers because some handlers do lot steps
     // or call code that can do far teleports in some conditions unexpectedly for generic way work code
     if (_player)

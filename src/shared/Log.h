@@ -115,6 +115,10 @@ class Log : public MaNGOS::Singleton<Log, MaNGOS::ClassLevelLockable<Log, std::m
                 fclose(dberLogfile);
             dberLogfile = nullptr;
 
+            if (elunaErrLogfile != nullptr)
+                fclose(elunaErrLogfile);
+            elunaErrLogfile = NULL;
+
             if (eventAiErLogfile != nullptr)
                 fclose(eventAiErLogfile);
             eventAiErLogfile = nullptr;
@@ -158,6 +162,10 @@ class Log : public MaNGOS::Singleton<Log, MaNGOS::ClassLevelLockable<Log, std::m
         // any log level
         void outChar(const char* str, ...)        ATTR_PRINTF(2, 3);
 
+        void outErrorEluna();                               // any log level
+        // any log level
+        void outErrorEluna(const char* str, ...)        ATTR_PRINTF(2, 3);
+
         void outErrorEventAI();                             // any log level
         // any log level
         void outErrorEventAI(const char* err, ...)      ATTR_PRINTF(2, 3);
@@ -184,11 +192,14 @@ class Log : public MaNGOS::Singleton<Log, MaNGOS::ClassLevelLockable<Log, std::m
         bool HasLogLevelOrHigher(LogLevel loglvl) const { return m_logLevel >= loglvl || (m_logFileLevel >= loglvl && logfile); }
         bool IsOutCharDump() const { return m_charLog_Dump; }
         bool IsIncludeTime() const { return m_includeTime; }
+        std::string GetTraceLog();
 
         static void WaitBeforeContinueIfNeed();
 
         // Set filename for scriptlibrary error output
         void setScriptLibraryErrorFile(char const* fname, char const* libName);
+
+        void traceLog();
 
     private:
         FILE* openLogFile(char const* configFileName, char const* configTimeStampFlag, char const* mode);
@@ -199,11 +210,14 @@ class Log : public MaNGOS::Singleton<Log, MaNGOS::ClassLevelLockable<Log, std::m
         FILE* gmLogfile;
         FILE* charLogfile;
         FILE* dberLogfile;
+        FILE* elunaErrLogfile;
         FILE* eventAiErLogfile;
         FILE* scriptErrLogFile;
         FILE* worldLogfile;
         FILE* customLogFile;
+
         std::mutex m_worldLogMtx;
+        std::mutex m_traceLogMtx;
 
         // log/console control
         LogLevel m_logLevel;

@@ -285,7 +285,13 @@ class Item : public Object
         void DeleteFromInventoryDB() const;
         void LoadLootFromDB(Field* fields);
 
+        Bag* ToBag() { if (IsBag()) return reinterpret_cast<Bag*>(this); else return NULL; }
+        const Bag* ToBag() const { if (IsBag()) return reinterpret_cast<const Bag*>(this); else return NULL; }
+
+        bool IsLocked() const { return !HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_UNLOCKED); }
         bool IsBag() const { return GetProto()->InventoryType == INVTYPE_BAG; }
+        bool IsCurrencyToken() const { return GetProto()->IsCurrencyToken(); }
+        bool IsNotEmptyBag() const;
         bool IsBroken() const { return GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0 && GetUInt32Value(ITEM_FIELD_DURABILITY) == 0; }
         bool CanBeTraded() const;
         void SetInTrade(bool b = true) { mb_in_trade = b; }
@@ -361,10 +367,15 @@ class Item : public Object
         bool HasInvolvedQuest(uint32 /*quest_id*/) const override { return false; }
         bool IsPotion() const { return GetProto()->IsPotion(); }
         bool IsConjuredConsumable() const { return GetProto()->IsConjuredConsumable(); }
+        bool IsWeaponVellum() const { return GetProto()->IsWeaponVellum(); }
+        bool IsArmorVellum() const { return GetProto()->IsArmorVellum(); }
 
         void AddToClientUpdateList() override;
         void RemoveFromClientUpdateList() override;
         void BuildUpdateData(UpdateDataMapType& update_players) override;
+
+        bool IsUsedInSpell() const { return m_usedInSpell; }
+        void SetUsedInSpell(bool state) { m_usedInSpell = state; }
     private:
         uint8 m_slot;
         Bag* m_container;
@@ -372,6 +383,7 @@ class Item : public Object
         int16 uQueuePos;
         bool mb_in_trade;                                   // true if item is currently in trade-window
         ItemLootUpdateState m_lootState;
+        bool m_usedInSpell;
         uint32 m_enchantmentModifier; // used by one script and removed in wotlk
 };
 

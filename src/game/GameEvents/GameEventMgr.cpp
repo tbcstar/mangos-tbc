@@ -29,6 +29,7 @@
 #include "Mails/MassMailMgr.h"
 #include "Server/SQLStorages.h"
 #include "Policies/Singleton.h"
+#include "LuaEngine.h"
 
 INSTANTIATE_SINGLETON_1(GameEventMgr);
 
@@ -72,6 +73,9 @@ void GameEventMgr::StartEvent(uint16 event_id, bool overwrite /*=false*/, bool r
         if (m_gameEvents[event_id].end <= m_gameEvents[event_id].start)
             m_gameEvents[event_id].end = m_gameEvents[event_id].start + m_gameEvents[event_id].length;
     }
+	//used by eluna
+	if (IsActiveEvent(event_id))
+		sEluna->OnGameEventStart(event_id);
 }
 
 void GameEventMgr::StopEvent(uint16 event_id, bool overwrite)
@@ -83,6 +87,9 @@ void GameEventMgr::StopEvent(uint16 event_id, bool overwrite)
         if (m_gameEvents[event_id].end <= m_gameEvents[event_id].start)
             m_gameEvents[event_id].end = m_gameEvents[event_id].start + m_gameEvents[event_id].length;
     }
+	//used by eluna
+	if (!IsActiveEvent(event_id))
+		sEluna->OnGameEventStop(event_id);
 }
 
 void GameEventMgr::LoadFromDB()

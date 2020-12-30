@@ -39,6 +39,7 @@
 #include "Util.h"
 #include "Tools/Language.h"
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
+#include "LuaEngine.h"
 
 #ifdef BUILD_PLAYERBOT
 #include "PlayerBot/Base/PlayerbotMgr.h"
@@ -409,6 +410,9 @@ void WorldSession::HandleCharCreateOpcode(WorldPacket& recv_data)
     DETAIL_LOG("Account: %d (IP: %s) Create Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
     sLog.outChar("Account: %d (IP: %s) Create Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
 
+    // used by eluna
+    sEluna->OnCreate(pNewChar);
+
     delete pNewChar;                                        // created only to call SaveToDB()
 }
 
@@ -460,6 +464,9 @@ void WorldSession::HandleCharDeleteOpcode(WorldPacket& recv_data)
     std::string IP_str = GetRemoteAddress();
     BASIC_LOG("Account: %d (IP: %s) Delete Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), lowguid);
     sLog.outChar("Account: %d (IP: %s) Delete Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), lowguid);
+
+    // used by eluna
+    sEluna->OnDelete(lowguid);
 
     if (sLog.IsOutCharDump())                               // optimize GetPlayerDump call
     {
@@ -778,6 +785,10 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
         SendNotification(LANG_RESET_TALENTS);               // we can use SMSG_TALENTS_INVOLUNTARILY_RESET here
     }
 
+ 	// used by eluna
+    if (pCurrChar->HasAtLoginFlag(AT_LOGIN_FIRST))
+        sEluna->OnFirstLogin(pCurrChar);
+
     if (pCurrChar->HasAtLoginFlag(AT_LOGIN_RESET_TAXINODES))
     {
         pCurrChar->InitTaxiNodesForLevel();
@@ -814,6 +825,10 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
         pCurrChar->SetStandState(UNIT_STAND_STATE_STAND);
 
     m_playerLoading = false;
+
+    // used by eluna
+    sEluna->OnLogin(pCurrChar);
+
     delete holder;
 }
 

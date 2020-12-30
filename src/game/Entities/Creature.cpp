@@ -46,6 +46,7 @@
 #include "Grids/CellImpl.h"
 #include "Movement/MoveSplineInit.h"
 #include "Entities/CreatureLinkingMgr.h"
+#include "LuaEngine.h"
 
 // apply implementation of the singletons
 #include "Policies/Singleton.h"
@@ -149,6 +150,7 @@ Creature::Creature(CreatureSubtype subtype) : Unit(),
 
     for (unsigned int& m_spell : m_spells)
         m_spell = 0;
+    DisableReputationGain = false;
 
     SetWalk(true, true);
 }
@@ -166,6 +168,8 @@ void Creature::CleanupsBeforeDelete()
 
 void Creature::AddToWorld()
 {
+    bool inWorld = IsInWorld();
+
     ///- Register the creature for guid lookup
     if (!IsInWorld() && GetObjectGuid().GetHigh() == HIGHGUID_UNIT)
         GetMap()->GetObjectsStore().insert<Creature>(GetObjectGuid(), (Creature*)this);
@@ -200,6 +204,8 @@ void Creature::AddToWorld()
 
     if (m_countSpawns)
         GetMap()->AddToSpawnCount(GetObjectGuid());
+	if (!inWorld)
+        sEluna->OnAddToWorld(this);
 }
 
 void Creature::RemoveFromWorld()
@@ -207,6 +213,7 @@ void Creature::RemoveFromWorld()
     ///- Remove the creature from the accessor
     if (IsInWorld())
     {
+		sEluna->OnRemoveFromWorld(this);
         if (GetObjectGuid().GetHigh() == HIGHGUID_UNIT)
             GetMap()->GetObjectsStore().erase<Creature>(GetObjectGuid(), (Creature*)nullptr);
 
@@ -560,12 +567,13 @@ bool Creature::UpdateEntry(uint32 Entry, const CreatureData* data /*=nullptr*/, 
 
 void Creature::ResetEntry(bool respawn)
 {
-    CreatureData const* data = sObjectMgr.GetCreatureData(m_dbGuid);
-    GameEventCreatureData const* eventData = sGameEventMgr.GetCreatureUpdateDataForActiveEvent(m_dbGuid);
+    bool isPet = GetObjectGuid().GetHigh() == HIGHGUID_PET;
+    CreatureData const* data = isPet ? nullptr : sObjectMgr.GetCreatureData(m_dbGuid);
+    GameEventCreatureData const* eventData = isPet ? nullptr : sGameEventMgr.GetCreatureUpdateDataForActiveEvent(m_dbGuid);
 
     if (respawn)
     {
-        uint32 newEntry = sObjectMgr.GetRandomEntry(m_dbGuid);
+        uint32 newEntry = isPet ? 0 : sObjectMgr.GetRandomEntry(m_dbGuid);
         if (newEntry)
         {
             UpdateEntry(newEntry, data, eventData, false);
@@ -690,8 +698,9 @@ void Creature::Update(const uint32 diff)
 
                 GetMap()->Add(this);
 
-                if (uint16 poolid = sPoolMgr.IsPartOfAPool<Creature>(m_dbGuid))
-                    sPoolMgr.UpdatePool<Creature>(*GetMap()->GetPersistentState(), poolid, m_dbGuid);
+                if (GetObjectGuid().GetHigh() != HIGHGUID_PET)
+                    if (uint16 poolid = sPoolMgr.IsPartOfAPool<Creature>(m_dbGuid))
+                        sPoolMgr.UpdatePool<Creature>(*GetMap()->GetPersistentState(), poolid, m_dbGuid);
             }
             break;
         }
@@ -2072,7 +2081,7 @@ void Creature::SaveRespawnTime()
 
 CreatureDataAddon const* Creature::GetCreatureAddon() const
 {
-    if (!(GetObjectGuid().GetHigh() == HIGHGUID_PET)) // pets have guidlow that is conflicting with normal guidlows hence GetGUIDLow() gives wrong info
+    if (GetObjectGuid().GetHigh() != HIGHGUID_PET) // pets have guidlow that is conflicting with normal guidlows hence GetGUIDLow() gives wrong info
         if (CreatureDataAddon const* addon = ObjectMgr::GetCreatureAddon(GetGUIDLow()))
             return addon;
 
@@ -2453,7 +2462,23 @@ void Creature::SelectAttackingTargets(std::vector<Unit*>& selectedTargets, Attac
             break;
     }
 }
+bool Creature::HasCategoryCooldown(uint32 spell_id) const
+{
+	SpellEntry const* spellInfo = GetSpellStore()->LookupEntry<SpellEntry>(spell_id);
+	if (!spellInfo)
+	{
+		return false;
+	}
 
+	CreatureSpellCooldowns::const_iterator itr = m_CreatureCategoryCooldowns.find(spellInfo->Category);
+	return (itr != m_CreatureCategoryCooldowns.end() && time_t(itr->second + (spellInfo->CategoryRecoveryTime / IN_MILLISECONDS)) > time(NULL));
+}
+uint32 Creature::GetCreatureSpellCooldownDelay(uint32 spellId) const
+{
+    CreatureSpellCooldowns::const_iterator itr = m_CreatureSpellCooldowns.find(spellId);
+    time_t t = time(NULL);
+    return uint32(itr != m_CreatureSpellCooldowns.end() && itr->second > t ? itr->second - t : 0);
+}
 bool Creature::HasSpell(uint32 spellID) const
 {
     uint8 i;
@@ -2502,6 +2527,9 @@ void Creature::GetRespawnCoord(float& x, float& y, float& z, float* ori, float* 
 
 void Creature::ResetRespawnCoord()
 {
+    if (GetObjectGuid().GetHigh() == HIGHGUID_PET)
+        return;
+
     if (CreatureData const* data = sObjectMgr.GetCreatureData(m_dbGuid))
     {
         m_respawnPos.x = data->posX;
@@ -2773,6 +2801,8 @@ void Creature::SpawnInMaps(uint32 db_guid, CreatureData const* data)
 
 bool Creature::HasStaticDBSpawnData() const
 {
+    if (GetObjectGuid().GetHigh() == HIGHGUID_PET)
+        return false;
     return sObjectMgr.GetCreatureData(m_dbGuid) != nullptr;
 }
 

@@ -65,6 +65,7 @@
 #include "Weather/Weather.h"
 #include "World/WorldState.h"
 #include "Cinematics/CinematicMgr.h"
+#include "LuaEngine.h"
 
 #ifdef BUILD_AHBOT
 #include "AuctionHouseBot/AuctionHouseBot.h"
@@ -671,7 +672,6 @@ void World::LoadConfigSettings(bool reload)
     setConfigMinMax(CONFIG_FLOAT_GHOST_RUN_SPEED_WORLD,   "Death.Ghost.RunSpeed.World", 1.0f, 0.1f, 10.0f);
     setConfigMinMax(CONFIG_FLOAT_GHOST_RUN_SPEED_BG,      "Death.Ghost.RunSpeed.Battleground", 1.0f, 0.1f, 10.0f);
 
-    setConfig(CONFIG_FLOAT_THREAT_RADIUS, "ThreatRadius", 100.0f);
     setConfigMin(CONFIG_UINT32_CREATURE_RESPAWN_AGGRO_DELAY, "CreatureRespawnAggroDelay", 5000, 0);
     setConfig(CONFIG_UINT32_CREATURE_PICKPOCKET_RESTOCK_DELAY, "CreaturePickpocketRestockDelay", 600);
 
@@ -822,6 +822,9 @@ void World::LoadConfigSettings(bool reload)
 
     setConfig(CONFIG_BOOL_PATH_FIND_OPTIMIZE, "PathFinder.OptimizePath", true);
     setConfig(CONFIG_BOOL_PATH_FIND_NORMALIZE_Z, "PathFinder.NormalizeZ", false);
+    setConfig(CONFIG_BOOL_ELUNA_ENABLED, "Eluna.Enabled", true);
+    if (reload)
+        sEluna->OnConfigLoad(reload);
 
     setConfig(CONFIG_BOOL_ACCOUNT_DATA, "AccountData", false);
 
@@ -932,6 +935,9 @@ void World::SetInitialWorldSettings()
     sObjectMgr.SetHighestGuids();                           // must be after PackInstances() and PackGroupIds()
     sLog.outString();
 
+    ///- Initialize Lua Engine
+    sLog.outString("Initialize Eluna Lua Engine...");
+    Eluna::Initialize();
     sLog.outString("Loading Page Texts...");
     sObjectMgr.LoadPageTexts();
 
@@ -1389,6 +1395,11 @@ void World::SetInitialWorldSettings()
 #ifdef BUILD_PLAYERBOT
     PlayerbotMgr::SetInitialWorldSettings();
 #endif
+    ///- Run eluna scripts.
+    // in multithread foreach: run scripts
+    sEluna->RunScripts();
+    sEluna->OnConfigLoad(false); // Must be done after Eluna is initialized and scripts have run
+    sLog.outString();
     sLog.outString("---------------------------------------");
     sLog.outString("      CMANGOS: World initialized       ");
     sLog.outString("---------------------------------------");
@@ -1529,6 +1540,8 @@ void World::Update(uint32 diff)
     sOutdoorPvPMgr.Update(diff);
     sWorldState.Update(diff);
     auto postSingletonTime = std::chrono::time_point_cast<std::chrono::milliseconds>(Clock::now());
+	///- used by eluna
+    sEluna->OnWorldUpdate(diff);
     ///- Update groups with offline leaders
     if (m_timers[WUPDATE_GROUPS].Passed())
     {
@@ -1987,6 +2000,8 @@ void World::ShutdownServ(uint32 time, uint32 options, uint8 exitcode)
         m_ShutdownTimer = time;
         ShutdownMsg(true);
     }
+    ///- Used by Eluna
+    sEluna->OnShutdownInitiate(ShutdownExitCode(exitcode), ShutdownMask(options));
 }
 
 /// Display a shutdown message to the user(s)
@@ -2028,6 +2043,9 @@ void World::ShutdownCancel()
     SendServerMessage(msgid);
 
     DEBUG_LOG("Server %s cancelled.", (m_ShutdownMask & SHUTDOWN_MASK_RESTART ? "restart" : "shutdown"));
+
+    ///- Used by Eluna
+    sEluna->OnShutdownCancel();
 }
 
 void World::UpdateSessions(uint32 diff)

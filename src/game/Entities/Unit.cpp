@@ -50,6 +50,8 @@
 #include "Tools/Formulas.h"
 #include "Metric/Metric.h"
 #include "Entities/Transports.h"
+#include "LuaEngine.h"
+#include "ElunaEventMgr.h"
 
 #include <math.h>
 #include <limits>
@@ -327,10 +329,12 @@ Unit::Unit() :
     m_regenTimer(0),
     m_combatData(new CombatData(this)),
     m_combatManager(this),
+    m_guardianPetsIterator(m_guardianPets.end()),
     m_spellUpdateHappening(false),
     m_spellProcsHappening(false),
     m_ignoreRangedTargets(false),
-    m_auraUpdateMask(0)
+    m_auraUpdateMask(0),
+    m_isMountOverriden(false), m_overridenMountId(0)
 {
     m_objectType |= TYPEMASK_UNIT;
     m_objectTypeId = TYPEID_UNIT;
@@ -477,6 +481,8 @@ void Unit::Update(const uint32 diff)
     }else
     m_AurasCheck -= p_time;*/
 
+    elunaEvents->Update(diff);
+
     // WARNING! Order of execution here is important, do not change.
     // Spells must be processed with event system BEFORE they go to _UpdateSpells.
     // Or else we may have some SPELL_STATE_FINISHED spells stalled in pointers, that is bad.
@@ -547,13 +553,11 @@ void Unit::TriggerEvadeEvents()
     if (m_isCreatureLinkingTrigger)
         GetMap()->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_EVADE, static_cast<Creature*>(this));
 
+    CallForAllControlledUnits([](Unit* unit) { unit->HandleExitCombat(); }, CONTROLLED_PET | CONTROLLED_GUARDIANS | CONTROLLED_CHARM | CONTROLLED_TOTEMS);
 
-    for (auto &guardianGuid : m_guardianPets)
-    {
-        if (auto pet = GetMap()->GetPet(guardianGuid))
-            if (pet->AI())
-                pet->AI()->EnterEvadeMode();
-    }
+    // used by eluna
+    if (GetTypeId() == TYPEID_PLAYER)
+        sEluna->OnPlayerEnterCombat(ToPlayer(), enemy);
 }
 
 void Unit::EvadeTimerExpired()
@@ -825,22 +829,6 @@ uint32 Unit::DealDamage(Unit* dealer, Unit* victim, uint32 damage, CleanDamage c
             victim->SetStandState(UNIT_STAND_STATE_STAND);
     }
 
-    if (!damage)
-    {
-        // Rage from physical damage received - extend to all units
-        if (cleanDamage && cleanDamage->damage && (damageSchoolMask & SPELL_SCHOOL_MASK_NORMAL) && victim->GetTypeId() == TYPEID_PLAYER && (victim->GetPowerType() == POWER_RAGE))
-            static_cast<Player*>(victim)->RewardRage(cleanDamage->damage, 0, false);
-
-        return 0;
-    }
-
-    DEBUG_FILTER_LOG(LOG_FILTER_DAMAGE, "DealDamageStart");
-
-    uint32 health = victim->GetHealth();
-    DEBUG_FILTER_LOG(LOG_FILTER_DAMAGE, "deal dmg:%d to health:%d ", damage, health);
-
-    // duel ends when player has 1 or less hp
-    bool duel_hasEnded = false;
     if (dealer)
     {
         // Rage from Damage made (only from direct weapon damage)
@@ -857,7 +845,7 @@ uint32 Unit::DealDamage(Unit* dealer, Unit* victim, uint32 damage, CleanDamage c
                     else
                         weaponSpeedHitFactor = uint32(dealer->GetAttackTime(cleanDamage->attackType) / 1000.0f * 3.5f);
 
-                    static_cast<Player*>(dealer)->RewardRage(damage, weaponSpeedHitFactor, true);
+                    static_cast<Player*>(dealer)->RewardRage(cleanDamage->damage, weaponSpeedHitFactor, true);
 
                     break;
                 }
@@ -868,7 +856,7 @@ uint32 Unit::DealDamage(Unit* dealer, Unit* victim, uint32 damage, CleanDamage c
                     else
                         weaponSpeedHitFactor = uint32(dealer->GetAttackTime(cleanDamage->attackType) / 1000.0f * 1.75f);
 
-                    static_cast<Player*>(dealer)->RewardRage(damage, weaponSpeedHitFactor, true);
+                    static_cast<Player*>(dealer)->RewardRage(cleanDamage->damage, weaponSpeedHitFactor, true);
 
                     break;
                 }
@@ -876,7 +864,27 @@ uint32 Unit::DealDamage(Unit* dealer, Unit* victim, uint32 damage, CleanDamage c
                     break;
             }
         }
+    }
+ 
+    if (!damage)
+    {
+        // Rage from physical damage received - extend to all units
+        if (cleanDamage && cleanDamage->damage && (damageSchoolMask & SPELL_SCHOOL_MASK_NORMAL) && victim->GetTypeId() == TYPEID_PLAYER && (victim->GetPowerType() == POWER_RAGE))
+            if (cleanDamage->hitOutCome != MELEE_HIT_DODGE && cleanDamage->hitOutCome != MELEE_HIT_PARRY)
+                static_cast<Player*>(victim)->RewardRage(cleanDamage->damage, 0, false);
 
+        return 0;
+    }
+
+    DEBUG_FILTER_LOG(LOG_FILTER_DAMAGE, "DealDamageStart");
+
+    uint32 health = victim->GetHealth();
+    DEBUG_FILTER_LOG(LOG_FILTER_DAMAGE, "deal dmg:%d to health:%d ", damage, health);
+
+    // duel ends when player has 1 or less hp
+    bool duel_hasEnded = false;
+    if (dealer)
+    {
         if (dealer->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED) && victim->GetTypeId() == TYPEID_PLAYER && static_cast<Player*>(victim)->duel && damage >= (health - 1))
         {
             // prevent kill only if killed in duel and killed by opponent or opponent controlled creature
@@ -1044,6 +1052,12 @@ void Unit::Kill(Unit* killer, Unit* victim, DamageEffectType damagetype, SpellEn
         if (UnitAI* ai = killer->AI())
             ai->KilledUnit(victim);
 
+        if (Creature* killer = ToCreature())
+        {
+            // used by eluna
+            if (Player* killed = victim->ToPlayer())
+                sEluna->OnPlayerKilledByCreature(killer, killed);
+        }
         // Call AI OwnerKilledUnit (for any current summoned minipet/guardian/protector)
         killer->PetOwnerKilledUnit(victim);
     }
@@ -1099,6 +1113,8 @@ void Unit::Kill(Unit* killer, Unit* victim, DamageEffectType damagetype, SpellEn
                 if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(playerVictim->GetCachedZoneId()))
                     outdoorPvP->HandlePlayerKill(responsiblePlayer, playerVictim);
             }
+            // used by eluna
+            sEluna->OnPVPKill(killer, playerVictim);
         }
     }
     else                                                // Killed creature
@@ -1144,14 +1160,15 @@ void Unit::HandleDamageDealt(Unit* dealer, Unit* victim, uint32& damage, CleanDa
     if (victim->GetTypeId() == TYPEID_PLAYER)                               // victim is a player
     {
         // Rage from damage received
-        if (dealer != victim && victim->GetPowerType() == POWER_RAGE)
-            ((Player*)victim)->RewardRage(cleanDamage ? cleanDamage->damage : 0, 0, false);
+        if (dealer != victim && victim->GetPowerType() == POWER_RAGE) // player doesnt get rage when he parries
+            if (cleanDamage && cleanDamage->damage && cleanDamage->hitOutCome != MELEE_HIT_DODGE && cleanDamage->hitOutCome != MELEE_HIT_PARRY)
+                static_cast<Player*>(victim)->RewardRage(cleanDamage->damage, 0, false);
 
         // random durability for items (HIT TAKEN)
         if (roll_chance_f(sWorld.getConfig(CONFIG_FLOAT_RATE_DURABILITY_LOSS_DAMAGE)))
         {
             EquipmentSlots slot = EquipmentSlots(urand(0, EQUIPMENT_SLOT_END - 1));
-            ((Player*)victim)->DurabilityPointLossForEquipSlot(slot);
+            static_cast<Player*>(victim)->DurabilityPointLossForEquipSlot(slot);
         }
     }
 
@@ -1191,7 +1208,7 @@ void Unit::HandleDamageDealt(Unit* dealer, Unit* victim, uint32& damage, CleanDa
     if (duel_hasEnded)
     {
         MANGOS_ASSERT(victim->GetTypeId() == TYPEID_PLAYER);
-        Player* he = (Player*)victim;
+        Player* he = static_cast<Player*>(victim);
 
         MANGOS_ASSERT(he->duel);
 
@@ -1311,9 +1328,13 @@ void Unit::JustKilledCreature(Unit* killer, Creature* victim, Player* responsibl
         mapInstance->OnCreatureDeath(victim);
 
     if (responsiblePlayer)                                  // killedby Player, inform BG
+    {
         if (BattleGround* bg = responsiblePlayer->GetBattleGround())
             bg->HandleKillUnit(victim, responsiblePlayer);
 
+        // used by eluna
+        sEluna->OnCreatureKill(responsiblePlayer, victim);
+    }
     // Notify the outdoor pvp script
     if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(responsiblePlayer ? responsiblePlayer->GetCachedZoneId() : victim->GetZoneId()))
         outdoorPvP->HandleCreatureDeath(victim);
@@ -1857,7 +1878,7 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
         {
             calcDamageInfo->TargetState = VICTIMSTATE_PARRY;
             calcDamageInfo->procEx |= PROC_EX_PARRY;
-            calcDamageInfo->cleanDamage = 0;
+            calcDamageInfo->cleanDamage += calcDamageInfo->totalDamage;
             calcDamageInfo->totalDamage = 0;
 
             for (uint8 i = 0; i < m_weaponDamageInfo.weapon[calcDamageInfo->attackType].lines; i++)
@@ -1869,7 +1890,7 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
         {
             calcDamageInfo->TargetState = VICTIMSTATE_DODGE;
             calcDamageInfo->procEx |= PROC_EX_DODGE;
-            calcDamageInfo->cleanDamage = 0;
+            calcDamageInfo->cleanDamage += calcDamageInfo->totalDamage;
             calcDamageInfo->totalDamage = 0;
 
             for (uint8 i = 0; i < m_weaponDamageInfo.weapon[calcDamageInfo->attackType].lines; i++)
@@ -2070,10 +2091,10 @@ void Unit::DealMeleeDamage(CalcDamageInfo* calcDamageInfo, bool durabilityLoss)
                     if (owner->CanJoinInAttacking(victim))
                         owner->EngageInCombatWithAggressor(victim);
 
-            for (auto m_guardianPet : m_guardianPets)
-                if (Unit* pet = (Unit*)GetMap()->GetPet(m_guardianPet))
-                    if (pet->CanJoinInAttacking(victim))
-                        pet->EngageInCombatWithAggressor(victim);
+            for (m_guardianPetsIterator = m_guardianPets.begin(); m_guardianPetsIterator != m_guardianPets.end();)
+                if (Pet* guardian = GetMap()->GetPet(*(m_guardianPetsIterator++)))
+                    if (guardian->CanJoinInAttacking(victim))
+                        guardian->EngageInCombatWithAggressor(victim);
         }
     }
 
@@ -4197,7 +4218,7 @@ void Unit::_UpdateSpells(uint32 time)
 void Unit::_UpdateAutoRepeatSpell()
 {
     // check "real time" interrupts
-    if (IsMoving() || IsNonMeleeSpellCasted(false, false, true))
+    if (IsMovingIgnoreFlying() || IsNonMeleeSpellCasted(false, false, true))
     {
         if (!IsNonMeleeSpellCasted(false, false, true, false, true)) // stricter check to see if we should introduce cooldown or just return
             return;
@@ -5987,7 +6008,7 @@ void Unit::SendEnchantmentLog(ObjectGuid targetGuid, uint32 itemEntry, uint32 en
     SendMessageToSet(data, true);
 }
 
-void Unit::CasterHitTargetWithSpell(Unit* realCaster, Unit* target, SpellEntry const* spellInfo, bool success/* = true*/)
+void Unit::CasterHitTargetWithSpell(Unit* realCaster, Unit* target, SpellEntry const* spellInfo, bool triggered, bool success/* = true*/)
 {
     switch (spellInfo->Id)
     {
@@ -6041,7 +6062,7 @@ void Unit::CasterHitTargetWithSpell(Unit* realCaster, Unit* target, SpellEntry c
         if (!spellInfo->HasAttribute(SPELL_ATTR_EX3_NO_INITIAL_AGGRO) && !spellInfo->HasAttribute(SPELL_ATTR_EX_NO_THREAT) && CanEnterCombat() && target->CanEnterCombat())
         {
             realCaster->SetInCombatWithAssisted(target);
-            target->getHostileRefManager().threatAssist(realCaster, 0.0f, spellInfo, false);
+            target->getHostileRefManager().threatAssist(realCaster, 0.0f, spellInfo, false, triggered);
         }
 
         if (spellInfo->HasAttribute(SPELL_ATTR_EX3_OUT_OF_COMBAT_ATTACK))
@@ -6213,6 +6234,162 @@ FactionTemplateEntry const* Unit::GetFactionTemplateEntry() const
     return entry;
 }
 
+bool Unit::IsHostileTo(Unit const* unit) const
+{
+	// always non-hostile to self
+	if (unit == this)
+	{
+		return false;
+	}
+
+	// always non-hostile to GM in GM mode
+	if (unit->GetTypeId() == TYPEID_PLAYER && ((Player const*)unit)->isGameMaster())
+	{
+		return false;
+	}
+
+	// always hostile to enemy
+	if (getVictim() == unit || unit->getVictim() == this)
+	{
+		return true;
+	}
+
+	// test pet/charm masters instead pers/charmeds
+	Unit const* testerOwner = GetCharmerOrOwner();
+	Unit const* targetOwner = unit->GetCharmerOrOwner();
+
+	// always hostile to owner's enemy
+	if (testerOwner && (testerOwner->getVictim() == unit || unit->getVictim() == testerOwner))
+	{
+		return true;
+	}
+
+	// always hostile to enemy owner
+	if (targetOwner && (getVictim() == targetOwner || targetOwner->getVictim() == this))
+	{
+		return true;
+	}
+
+	// always hostile to owner of owner's enemy
+	if (testerOwner && targetOwner && (testerOwner->getVictim() == targetOwner || targetOwner->getVictim() == testerOwner))
+	{
+		return true;
+	}
+
+	Unit const* tester = testerOwner ? testerOwner : this;
+	Unit const* target = targetOwner ? targetOwner : unit;
+
+	// always non-hostile to target with common owner, or to owner/pet
+	if (tester == target)
+	{
+		return false;
+	}
+
+	// special cases (Duel, etc)
+	if (tester->GetTypeId() == TYPEID_PLAYER && target->GetTypeId() == TYPEID_PLAYER)
+	{
+		Player const* pTester = (Player const*)tester;
+		Player const* pTarget = (Player const*)target;
+
+		// Duel
+		if (pTester->IsInDuelWith(pTarget))
+		{
+			return true;
+		}
+
+		// Group
+		if (pTester->GetGroup() && pTester->GetGroup() == pTarget->GetGroup())
+		{
+			return false;
+		}
+
+		// Sanctuary
+		if (pTarget->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_SANCTUARY) && pTester->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_SANCTUARY))
+		{
+			return false;
+		}
+
+		//// PvP FFA state
+		//if (pTester->IsFFAPvP() && pTarget->IsFFAPvP())
+		//{
+		//	return true;
+		//}
+
+		//= PvP states
+		// Green/Blue (can't attack)
+		if (pTester->GetTeam() == pTarget->GetTeam())
+		{
+			return false;
+		}
+
+		// Red (can attack) if true, Blue/Yellow (can't attack) in another case
+		return pTester->IsPvP() && pTarget->IsPvP();
+	}
+
+	// faction base cases
+	FactionTemplateEntry const* tester_faction = tester->GetFactionTemplateEntry();
+	FactionTemplateEntry const* target_faction = target->GetFactionTemplateEntry();
+	if (!tester_faction || !target_faction)
+	{
+		return false;
+	}
+
+	if (target->isAttackingPlayer() && tester->IsContestedGuard())
+	{
+		return true;
+	}
+
+	// PvC forced reaction and reputation case
+	if (tester->GetTypeId() == TYPEID_PLAYER)
+	{
+		if (target_faction->faction)
+		{
+			// forced reaction
+			if (ReputationRank const* force = ((Player*)tester)->GetReputationMgr().GetForcedRankIfAny(target_faction))
+			{
+				return *force <= REP_HOSTILE;
+			}
+
+			// if faction have reputation then hostile state for tester at 100% dependent from at_war state
+#ifdef CMANGOS
+			if (FactionEntry const* raw_target_faction = sFactionStore.LookupEntry<FactionEntry>(target_faction->faction))
+#else
+			if (FactionEntry const* raw_target_faction = sFactionStore.LookupEntry(target_faction->faction))
+#endif
+				if (FactionState const* factionState = ((Player*)tester)->GetReputationMgr().GetState(raw_target_faction))
+				{
+					return (factionState->Flags & FACTION_FLAG_AT_WAR);
+				}
+		}
+	}
+	// CvP forced reaction and reputation case
+	else if (target->GetTypeId() == TYPEID_PLAYER)
+	{
+		if (tester_faction->faction)
+		{
+			// forced reaction
+			if (ReputationRank const* force = ((Player*)target)->GetReputationMgr().GetForcedRankIfAny(tester_faction))
+			{
+				return *force <= REP_HOSTILE;
+			}
+
+			// apply reputation state
+#ifdef CMANGOS
+			FactionEntry const* raw_tester_faction = sFactionStore.LookupEntry<FactionEntry>(tester_faction->faction);
+#else
+			FactionEntry const* raw_tester_faction = sFactionStore.LookupEntry(tester_faction->faction);
+#endif
+
+			if (raw_tester_faction && raw_tester_faction->reputationListID >= 0)
+			{
+				return ((Player const*)target)->GetReputationMgr().GetRank(raw_tester_faction) <= REP_HOSTILE;
+			}
+		}
+	}
+
+	// common faction based case (CvC,PvC,CvP)
+	return tester_faction->IsHostileTo(*target_faction);
+}
 bool Unit::IsNeutralToAll() const
 {
     FactionTemplateEntry const* my_faction = GetFactionTemplateEntry();
@@ -6409,6 +6586,22 @@ void Unit::CombatStopWithPets(bool includingCast, bool includingCombo)
 {
     CombatStop(includingCast, includingCombo);
     CallForAllControlledUnits(CombatStopWithPetsHelper(includingCast, includingCombo), CONTROLLED_PET | CONTROLLED_GUARDIANS | CONTROLLED_CHARM);
+}
+
+struct IsAttackingPlayerHelper
+{
+	explicit IsAttackingPlayerHelper() {}
+	bool operator()(Unit const* unit) const { return unit->isAttackingPlayer(); }
+};
+
+bool Unit::isAttackingPlayer() const
+{
+	if (hasUnitState(UNIT_STAT_ATTACK_PLAYER))
+	{
+		return true;
+	}
+
+	return CheckAllControlledUnits(IsAttackingPlayerHelper(), CONTROLLED_PET | CONTROLLED_TOTEMS | CONTROLLED_GUARDIANS | CONTROLLED_CHARM);
 }
 
 void Unit::RemoveAllAttackers()
@@ -6811,6 +7004,8 @@ void Unit::AddGuardian(Pet* pet)
 
 void Unit::RemoveGuardian(Pet* pet)
 {
+    if (m_guardianPetsIterator != m_guardianPets.end() && *m_guardianPetsIterator == pet->GetObjectGuid())
+        ++m_guardianPetsIterator;
     m_guardianPets.erase(pet->GetObjectGuid());
 }
 
@@ -6830,9 +7025,9 @@ void Unit::RemoveGuardians()
 Pet* Unit::FindGuardianWithEntry(uint32 entry)
 {
     for (auto m_guardianPet : m_guardianPets)
-        if (Pet* pet = GetMap()->GetPet(m_guardianPet))
-            if (pet->GetEntry() == entry)
-                return pet;
+        if (Pet* guardian = GetMap()->GetPet(m_guardianPet))
+            if (guardian->GetEntry() == entry)
+                return guardian;
 
     return nullptr;
 }
@@ -6842,8 +7037,8 @@ uint32 Unit::CountGuardiansWithEntry(uint32 entry)
     uint32 count = 0;
 
     for (auto m_guardianPet : m_guardianPets)
-        if (Pet* pet = GetMap()->GetPet(m_guardianPet))
-            if (pet->GetEntry() == entry)
+        if (Pet* guardian = GetMap()->GetPet(m_guardianPet))
+            if (guardian->GetEntry() == entry)
                 count++;
 
     return count;
@@ -8040,16 +8235,25 @@ bool Unit::Mount(uint32 displayid, const Aura* aura/* = nullptr*/)
         return false;
 
     RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_MOUNTING);
-    SetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID, displayid);
+    if (!m_isMountOverriden)
+        SetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID, displayid);
+    else
+        SetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID, m_overridenMountId);
     SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_MOUNT);
     return true;
 }
 
 bool Unit::Unmount(const Aura* aura/* = nullptr*/)
 {
-    // Custom mount (non-aura such as taxi or command) overwrites aura mounts, do not dismount on aura removal
-    if (!IsMounted() || (aura && uint32(aura->GetAmount()) != GetMountID()))
+    if (!IsMounted())
         return false;
+
+    if (aura)
+    {
+        // Custom mount (non-aura such as taxi or command) overwrites aura mounts, do not dismount on aura removal
+        if (uint32(aura->GetAmount()) != GetMountID() && !m_isMountOverriden)
+            return false;
+    }
 
     RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_NOT_MOUNTED);
     SetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID, 0);
@@ -8261,6 +8465,10 @@ void Unit::SetInCombatState(bool PvP, Unit* enemy)
 
         TriggerAggroLinkingEvent(enemy);
     }
+
+    // used by eluna
+    if (GetTypeId() == TYPEID_PLAYER)
+        sEluna->OnPlayerEnterCombat(ToPlayer(), enemy);
 }
 
 void Unit::EngageInCombatWith(Unit* enemy)
@@ -8286,7 +8494,35 @@ void Unit::ClearInCombat()
     RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_IN_COMBAT);
 
     if (GetTypeId() == TYPEID_PLAYER)
+        sEluna->OnPlayerLeaveCombat(ToPlayer());
         static_cast<Player*>(this)->pvpInfo.inPvPCombat = false;
+}
+
+bool Unit::IsTargetableForAttack(bool inverseAlive /*=false*/) const
+{
+	if (GetTypeId() == TYPEID_PLAYER && ((Player*)this)->isGameMaster())
+	{
+		return false;
+	}
+
+	if (HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE))
+	{
+		return false;
+	}
+
+	// to be removed if unit by any reason enter combat
+	if (HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER))
+	{
+		return false;
+	}
+
+	// inversealive is needed for some spells which need to be casted at dead targets (aoe)
+	if (isAlive() == inverseAlive)
+	{
+		return false;
+	}
+
+	return IsInWorld() && !hasUnitState(UNIT_STAT_FEIGN_DEATH) && !IsTaxiFlying();
 }
 
 void Unit::HandleExitCombat(bool pvpCombat)
@@ -8372,7 +8608,7 @@ bool Unit::IsVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
 
     // player visible for other player if not logout and at same transport
     // including case when player is out of world
-    bool at_same_transport = GetTransport() == u->GetTransport();
+    bool at_same_transport = GetTransport() && GetTransport() == u->GetTransport();
 
     // not in world
     if (!at_same_transport && (!IsInWorld() || !u->IsInWorld()))
@@ -8958,11 +9194,14 @@ bool Unit::SelectHostileTarget()
 
     if (target)
     {
-        // needs a much better check, seems to cause quite a bit of trouble
-        SetInFront(target);
+        if (!AI()->IsTargetingRestricted())
+        {
+            // needs a much better check, seems to cause quite a bit of trouble
+            SetInFront(target);
 
-        if (oldTarget != target || GetTarget() != target)
-            AI()->AttackStart(target);
+            if (oldTarget != target || GetTarget() != target)
+                AI()->AttackStart(target);
+        }
 
         // check if currently selected target is reachable
         // NOTE: path alrteady generated from AttackStart()
@@ -9687,7 +9926,7 @@ CharmInfo::CharmInfo(Unit* unit) :
     m_petnumber(0), m_opener(0), m_openerMinRange(0),
     m_openerMaxRange(0), m_unitFieldFlags(0), m_unitFieldBytes2_1(0), m_retreating(false), m_stayPosSet(false),
     m_stayPosX(0), m_stayPosY(0), m_stayPosZ(0),
-    m_stayPosO(0), m_walk(true)
+    m_stayPosO(0), m_walk(true), m_deleted(false)
 {
     for (auto& m_charmspell : m_charmspells)
         m_charmspell.SetActionAndType(0, ACT_DISABLED);
@@ -9697,12 +9936,17 @@ CharmInfo::~CharmInfo()
 {
     delete m_combatData;
     delete m_ai;
+    m_deleted = true;
 }
 
 void CharmInfo::SetCharmState(std::string const& ainame, bool withNewThreatList /*= true*/)
 {
-    if (!ainame.empty())
-        m_ai = FactorySelector::GetSpecificAI(m_unit, ainame);
+    SetCharmState(((!ainame.empty()) ? FactorySelector::GetSpecificAI(m_unit, ainame) : nullptr), withNewThreatList);
+}
+
+void CharmInfo::SetCharmState(UnitAI* ai, bool withNewThreatList /*= true*/)
+{
+    m_ai = ai;
 
     if (withNewThreatList)
         m_combatData = new CombatData(m_unit);
@@ -9767,6 +10011,49 @@ void CharmInfo::InitEmptyActionBar()
 {
     for (uint32 x = ACTION_BAR_INDEX_START + 1; x < ACTION_BAR_INDEX_END; ++x)
         SetActionBar(x, 0, ACT_PASSIVE);
+}
+
+void CharmInfo::ProcessUnattackableTargets()
+{
+    // if after faction change and combat init cant attack target, remove it
+    if (!m_unit->getThreatManager().getThreatList().empty()) // threat list case
+    {
+        Unit::AttackerSet friendlyTargets;
+        for (auto itr = m_unit->getThreatManager().getThreatList().begin(); itr != m_unit->getThreatManager().getThreatList().end(); ++itr)
+        {
+            Unit* attacker = (*itr)->getTarget();
+            if (attacker->GetTypeId() != TYPEID_UNIT)
+                continue;
+
+            if (!m_unit->CanAttack(attacker))
+                friendlyTargets.insert(attacker);
+        }
+
+        for (auto attacker : friendlyTargets)
+        {
+            attacker->AttackStop(true, true);
+            attacker->getThreatManager().modifyThreatPercent(m_unit, -101);
+        }
+    }
+    else // attacker set case
+    {
+        Unit::AttackerSet friendlyTargets;
+        for (Unit::AttackerSet::const_iterator itr = m_unit->getAttackers().begin(); itr != m_unit->getAttackers().end(); ++itr)
+        {
+            Unit* attacker = (*itr);
+            if (attacker->GetTypeId() != TYPEID_UNIT)
+                continue;
+
+            if (!m_unit->CanAttack(attacker))
+                friendlyTargets.insert(attacker);
+        }
+
+        for (auto attacker : friendlyTargets)
+        {
+            attacker->AttackStop(true, true);
+            attacker->getThreatManager().modifyThreatPercent(m_unit, -101);
+        }
+    }
 }
 
 void CharmInfo::InitPossessCreateSpells()
@@ -10662,7 +10949,7 @@ bool Unit::HasDamageInterruptibleStunAura() const
 
 void Unit::ApplyAttackTimePercentMod(WeaponAttackType att, float val, bool apply)
 {
-    float oldVal = m_modAttackSpeedPct[att];
+    float oldVal = GetFloatValue(UNIT_FIELD_BASEATTACKTIME + att);
     if (val > 0)
     {
         ApplyPercentModFloatVar(m_modAttackSpeedPct[att], val, !apply);
@@ -10673,7 +10960,10 @@ void Unit::ApplyAttackTimePercentMod(WeaponAttackType att, float val, bool apply
         ApplyPercentModFloatVar(m_modAttackSpeedPct[att], -val, apply);
         ApplyPercentModFloatValue(UNIT_FIELD_BASEATTACKTIME + att, -val, apply);
     }
-    setAttackTimer(att, getAttackTimer(att) * m_modAttackSpeedPct[att] / oldVal);
+    float newVal = GetFloatValue(UNIT_FIELD_BASEATTACKTIME + att);
+    uint32 attackTimer = getAttackTimer(att);
+    int32 diff = newVal - oldVal;
+    setAttackTimer(att, diff < -int32(attackTimer) ? 0 : attackTimer + diff);
 }
 
 void Unit::ApplyCastTimePercentMod(float val, bool apply)
@@ -11371,6 +11661,8 @@ Unit* Unit::TakePossessOf(SpellEntry const* spellEntry, SummonPropertiesEntry co
     if (possessed->IsImmuneToNPC() != immuneNPC)
         possessed->SetImmuneToNPC(immuneNPC);
 
+    charmInfo->ProcessUnattackableTargets();
+
     if (player)
     {
         // Initialize pet bar
@@ -11463,6 +11755,8 @@ bool Unit::TakePossessOf(Unit* possessed)
 
     charmInfo->SetCharmStartPosition(combatStartPosition.IsEmpty() ? possessed->GetPosition() : combatStartPosition);
 
+    charmInfo->ProcessUnattackableTargets();
+
     if (!IsInCombat())
     {
         possessed->GetCombatManager().StopCombatTimer();
@@ -11528,7 +11822,6 @@ bool Unit::TakeCharmOf(Unit* charmed, uint32 spellId, bool advertised /*= true*/
         m_charmedUnitsPrivate.insert(charmed->GetObjectGuid());
 
     CharmInfo* charmInfo = charmed->InitCharmInfo(charmed);
-    charmed->DeleteThreatList();
 
     bool isPossessCharm = IsPossessCharmType(spellId);
 
@@ -11586,6 +11879,9 @@ bool Unit::TakeCharmOf(Unit* charmed, uint32 spellId, bool advertised /*= true*/
         }
     }
 
+    if (charmInfo->GetUnit() != charmed)
+        sLog.outCustomLog("Unit didnt equal in Unit::TakeCharmOf after base changes.");
+
     // New flags for the duration of charm need to be set after SetCharmState, gets reset in ResetCharmState
     if (HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
         charmed->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
@@ -11608,6 +11904,14 @@ bool Unit::TakeCharmOf(Unit* charmed, uint32 spellId, bool advertised /*= true*/
         if (charmerPlayer->GetGroup())
             charmerPlayer->SetGroupUpdateFlag(GROUP_UPDATE_PET);
     }
+
+    if (charmInfo->GetUnit() != charmed)
+        sLog.outCustomLog("Unit didnt equal in Unit::TakeCharmOf after flag changes.");
+
+    charmInfo->ProcessUnattackableTargets();
+
+    if (charmInfo->GetUnit() != charmed)
+        sLog.outCustomLog("Unit didnt equal in Unit::TakeCharmOf after attackability changes.");
 
     // put charmed in combat with all charmers enemies - must be done after flags
     ThreatList const& list = getThreatManager().getThreatList();
@@ -11755,14 +12059,15 @@ void Unit::Uncharm(Unit* charmed, uint32 spellId)
             charmedCreature->ClearTemporaryFaction();
 
             charmed->AttackStop(true, true);
-            charmed->m_events.KillAllEvents(true);
+            charmed->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+            charmed->InterruptSpell(CURRENT_MELEE_SPELL);
 
             charmInfo->ResetCharmState();
             charmed->DeleteCharmInfo();
 
             // first find friendly target (stopping combat here is not recommended because m_attackers will be modified)
             AttackerSet friendlyTargets;
-            for (Unit::AttackerSet::const_iterator itr = charmed->getAttackers().begin(); itr != charmed->getAttackers().end(); ++itr)
+            for (auto itr = charmed->getAttackers().begin(); itr != charmed->getAttackers().end(); ++itr)
             {
                 Unit* attacker = (*itr);
                 if (attacker->GetTypeId() != TYPEID_UNIT)
@@ -11772,11 +12077,20 @@ void Unit::Uncharm(Unit* charmed, uint32 spellId)
                     friendlyTargets.insert(attacker);
             }
 
+            for (auto itr = charmed->getThreatManager().getThreatList().begin(); itr != charmed->getThreatManager().getThreatList().end(); ++itr)
+            {
+                Unit* attacker = (*itr)->getTarget();
+                if (attacker->GetTypeId() != TYPEID_UNIT)
+                    continue;
+
+                if (!charmed->CanAttack(attacker))
+                    friendlyTargets.insert(attacker);
+            }
+
             // now stop attackers combat and transfer threat generated from this to owner, also get the total generated threat
             for (auto attacker : friendlyTargets)
             {
                 attacker->AttackStop(true, true);
-                attacker->m_events.KillAllEvents(true);
                 attacker->getThreatManager().modifyThreatPercent(charmed, -101);     // only remove the possessed creature from threat list because it can be filled by other players
                 attacker->AddThreat(this);
             }
@@ -11834,7 +12148,7 @@ void Unit::Uncharm(Unit* charmed, uint32 spellId)
                 EngageInCombatWithAggressor(charmed);
 
             if (charmed->GetTypeId() == TYPEID_UNIT)
-                charmed->AddThreat(this, GetMaxHealth()); // Simulates being charmed
+                charmed->AddThreat(this, charmed->GetMaxHealth()); // Simulates being charmed
             this->AddThreat(charmed);
 
             if (charmed->GetTypeId() == TYPEID_UNIT)
@@ -12184,4 +12498,23 @@ uint32 Unit::GetModifierXpBasedOnDamageReceived(uint32 xp)
             xp *= (1.f - percentageHp);
     }
     return xp;
+}
+
+void Unit::OverrideMountDisplayId(uint32 newDisplayId)
+{
+    if (newDisplayId)
+    {
+        m_overridenMountId = newDisplayId;
+        if (GetAurasByType(SPELL_AURA_MOUNTED).size())
+            SetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID, newDisplayId);
+        m_isMountOverriden = true;
+    }
+    else
+    {
+        m_isMountOverriden = false;
+        auto& mountedAuras = GetAurasByType(SPELL_AURA_MOUNTED);
+        if (mountedAuras.size())
+            SetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID, mountedAuras.back()->GetAmount());
+        m_overridenMountId = 0;
+    }
 }

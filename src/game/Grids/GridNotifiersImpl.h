@@ -251,7 +251,7 @@ inline void MaNGOS::DynamicObjectUpdater::VisitHelper(Unit* target)
         return;
 
     // Check target immune to spell or aura
-    if (target->IsImmuneToSpell(spellInfo, false, eff_index) || target->IsImmuneToSpellEffect(spellInfo, eff_index, false))
+    if (target->IsImmuneToSpell(spellInfo, false, (1 << eff_index)) || target->IsImmuneToSpellEffect(spellInfo, eff_index, false))
         return;
 
     if (!spellInfo->HasAttribute(SPELL_ATTR_EX2_IGNORE_LOS) && !i_dynobject.IsWithinLOSInMap(target))
@@ -288,7 +288,7 @@ inline void MaNGOS::DynamicObjectUpdater::VisitHelper(Unit* target)
     if (!i_dynobject.IsAffecting(target))
     {
         i_dynobject.AddAffected(target);
-        caster->CasterHitTargetWithSpell(caster, target, spellInfo);
+        caster->CasterHitTargetWithSpell(caster, target, spellInfo, false);
     }
 }
 
@@ -386,6 +386,71 @@ void MaNGOS::WorldObjectSearcher<Check>::Visit(DynamicObjectMapType& m)
         return;
 
     for (DynamicObjectMapType::iterator itr = m.begin(); itr != m.end(); ++itr)
+    {
+        if (i_check(itr->getSource()))
+        {
+            i_object = itr->getSource();
+            return;
+        }
+    }
+}
+
+template<class Check>
+void MaNGOS::WorldObjectLastSearcher<Check>::Visit(GameObjectMapType& m)
+{
+    for (GameObjectMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    {
+        if (i_check(itr->getSource()))
+        {
+            i_object = itr->getSource();
+            return;
+        }
+    }
+}
+
+template<class Check>
+void MaNGOS::WorldObjectLastSearcher<Check>::Visit(PlayerMapType& m)
+{
+    for (PlayerMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    {
+        if (i_check(itr->getSource()))
+        {
+            i_object = itr->getSource();
+            return;
+        }
+    }
+}
+
+template<class Check>
+void MaNGOS::WorldObjectLastSearcher<Check>::Visit(CreatureMapType& m)
+{
+    for (CreatureMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    {
+        if (i_check(itr->getSource()))
+        {
+            i_object = itr->getSource();
+            return;
+        }
+    }
+}
+
+template<class Check>
+void MaNGOS::WorldObjectLastSearcher<Check>::Visit(CorpseMapType& m)
+{
+    for (CorpseMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    {
+        if (i_check(itr->getSource()))
+        {
+            i_object = itr->getSource();
+            return;
+        }
+    }
+}
+
+template<class Check>
+void MaNGOS::WorldObjectLastSearcher<Check>::Visit(DynamicObjectMapType& m)
+{
+    for (DynamicObjectMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
     {
         if (i_check(itr->getSource()))
         {

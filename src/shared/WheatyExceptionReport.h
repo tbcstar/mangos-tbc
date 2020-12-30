@@ -1,10 +1,14 @@
+//==========================================
+// Matt Pietrek
+// MSDN Magazine, 2002
+// FILE: WheatyExceptionReport.h
+//==========================================
 #ifndef _WHEATYEXCEPTIONREPORT_
 #define _WHEATYEXCEPTIONREPORT_
 
-#pragma warning(push)
-#pragma warning(disable:4091)
+#if PLATFORM == PLATFORM_WINDOWS
+
 #include <dbghelp.h>
-#pragma warning(pop)
 
 enum BasicType                                              // Stolen from CVCONST.H in the DIA 2.0 SDK
 {
@@ -86,28 +90,31 @@ class WheatyExceptionReport
         // Helper functions
         static LPTSTR GetExceptionString(DWORD dwCode);
         static BOOL GetLogicalAddress(PVOID addr, PTSTR szModule, DWORD len,
-                                      DWORD& section, DWORD_PTR& offset);
+            DWORD& section, DWORD_PTR& offset);
 
         static void WriteStackDetails(PCONTEXT pContext, bool bWriteVariables, HANDLE pThreadHandle);
 
-        static BOOL CALLBACK EnumerateSymbolsCallback(PSYMBOL_INFO, ULONG, PVOID);
+        static BOOL CALLBACK EnumerateSymbolsCallback(PSYMBOL_INFO,ULONG, PVOID);
 
-        static bool FormatSymbolValue(PSYMBOL_INFO, STACKFRAME*, char* pszBuffer, unsigned cbBuffer);
+        static bool FormatSymbolValue(PSYMBOL_INFO, STACKFRAME *, char * pszBuffer, unsigned cbBuffer);
 
-        static char* DumpTypeIndex(char*, DWORD64, DWORD, unsigned, DWORD_PTR, bool&, char*);
+        static char * DumpTypeIndex(char *, DWORD64, DWORD, unsigned, DWORD_PTR, bool & , char*);
 
-        static char* FormatOutputValue(char* pszCurrBuffer, BasicType basicType, DWORD64 length, PVOID pAddress);
+        static char * FormatOutputValue(char * pszCurrBuffer, BasicType basicType, DWORD64 length, PVOID pAddress);
 
         static BasicType GetBasicType(DWORD typeIndex, DWORD64 modBase);
 
-        static int _tprintf(const TCHAR* format, ...);
+        static int _tprintf(const TCHAR * format, ...);
 
         // Variables used by the class
         static TCHAR m_szLogFileName[MAX_PATH];
+        static TCHAR m_szDumpFileName[MAX_PATH];
         static LPTOP_LEVEL_EXCEPTION_FILTER m_previousFilter;
         static HANDLE m_hReportFile;
+        static HANDLE m_hDumpFile;
         static HANDLE m_hProcess;
 };
 
 extern WheatyExceptionReport g_WheatyExceptionReport;       //  global instance of class
-#endif                                                      // WheatyExceptionReport
+#endif                                                      // _WIN32
+#endif                                                      // _WHEATYEXCEPTIONREPORT_

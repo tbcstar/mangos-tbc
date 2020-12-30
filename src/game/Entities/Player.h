@@ -885,7 +885,7 @@ class TradeData
 
     private:                                                // internal functions
 
-        void Update(bool for_trader = true) const;
+		void Update(bool for_trader = true) const;
 
         Player*    m_player;                                // Player who own of this TradeData
         Player*    m_trader;                                // Player who trade with m_player
@@ -941,9 +941,12 @@ class Player : public Unit
 
         bool Create(uint32 guidlow, const std::string& name, uint8 race, uint8 class_, uint8 gender, uint8 skin, uint8 face, uint8 hairStyle, uint8 hairColor, uint8 facialHair, uint8 outfitId);
 
-        void Update(const uint32 diff) override;
+        void Update(const uint32 diff);
 
         static bool BuildEnumData(QueryResult* result,  WorldPacket& p_data);
+
+		bool IsUnderWater() const;
+		bool IsFalling() { return GetPositionZ() < m_lastFallZ; }
 
         void SendInitialPacketsBeforeAddToMap();
         void SendInitialPacketsAfterAddToMap();
@@ -1087,6 +1090,7 @@ class Player : public Unit
         uint8 FindEquipSlot(ItemPrototype const* proto, uint32 slot, bool swap) const;
         uint32 GetItemCount(uint32 item, bool inBankAlso = false, Item* skipItem = nullptr) const;
         Item* GetItemByGuid(ObjectGuid guid) const;
+        Item* GetItemByEntry(uint32 item) const;            // only for special cases
         Item* GetItemByPos(uint16 pos) const;
         Item* GetItemByPos(uint8 bag, uint8 slot) const;
         uint32 GetItemDisplayIdInSlot(uint8 bag, uint8 slot) const;
@@ -1413,17 +1417,8 @@ class Player : public Unit
         void setWeaponChangeTimer(uint32 time) {m_weaponChangeTimer = time;}
 
         uint32 GetMoney() const { return GetUInt32Value(PLAYER_FIELD_COINAGE); }
-        void ModifyMoney(int32 d)
-        {
-            if (d < 0)
-                SetMoney(GetMoney() > uint32(-d) ? GetMoney() + d : 0);
-            else
-                SetMoney(GetMoney() < uint32(MAX_MONEY_AMOUNT - d) ? GetMoney() + d : MAX_MONEY_AMOUNT);
+        void ModifyMoney(int32 d);
 
-            // "At Gold Limit"
-            if (GetMoney() >= MAX_MONEY_AMOUNT)
-                SendEquipError(EQUIP_ERR_TOO_MUCH_GOLD, nullptr, nullptr);
-        }
         void SetMoney(uint32 value)
         {
             SetUInt32Value(PLAYER_FIELD_COINAGE, value);
@@ -1494,7 +1489,7 @@ class Player : public Unit
         bool IsNeedCastPassiveLikeSpellAtLearn(SpellEntry const* spellInfo) const;
         bool IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index, bool castOnSelf) const override;
 
-        void KnockBackFrom(Unit* target, float horizontalSpeed, float verticalSpeed);
+        void KnockBackFrom(Unit* source, Unit* target, float horizontalSpeed, float verticalSpeed);
 
         void SendProficiency(ItemClass itemClass, uint32 itemSubclassMask) const;
         void SendInitialSpells() const;
@@ -1511,7 +1506,7 @@ class Player : public Unit
         void learnSpellHighRank(uint32 spellid);
 
         uint32 GetFreeTalentPoints() const { return GetUInt32Value(PLAYER_CHARACTER_POINTS1); }
-        void SetFreeTalentPoints(uint32 points) { SetUInt32Value(PLAYER_CHARACTER_POINTS1, points); }
+        void SetFreeTalentPoints(uint32 points);
         void UpdateFreeTalentPoints(bool resetIfNeed = true);
         bool resetTalents(bool no_cost = false);
         uint32 resetTalentsCost() const;
@@ -1565,6 +1560,12 @@ class Player : public Unit
         PvPInfo pvpInfo;
         void UpdatePvP(bool state, bool overriding = false);
         void UpdatePvPContested(bool state, bool overriding = false);
+
+		void SetFFAPvP(bool state);
+		bool IsFFAPvP() const
+		{
+			return HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_FFA_PVP);
+		}
 
         // forced update needed for on-resurrection event
         void UpdateZone(uint32 newZone, uint32 newArea, bool force = false);
@@ -1631,6 +1632,8 @@ class Player : public Unit
         void StopCinematic();
         bool UpdateSkill(uint16 id, uint16 diff);
         bool UpdateSkillPro(uint16 id, int32 Chance, uint16 diff);
+
+		void UpdateSkillsToMaxSkillsForLevel();             // for .levelup
 
         bool UpdateCraftSkill(uint32 spellid);
         bool UpdateGatherSkill(uint32 SkillId, uint32 SkillValue, uint32 RedLevel, uint32 Multiplicator = 1);
@@ -1726,6 +1729,7 @@ class Player : public Unit
         void ResurrectPlayer(float restore_percent, bool applySickness = false);
         void BuildPlayerRepop();
         void RepopAtGraveyard();
+        std::pair<bool, AreaTrigger const*> CheckAndRevivePlayerOnDungeonEnter(MapEntry const* targetMapEntry, uint32 targetMapId);
 
         void DurabilityLossAll(double percent, bool inventory);
         void DurabilityLoss(Item* item, double percent);
@@ -1775,6 +1779,9 @@ class Player : public Unit
 
         virtual uint32 GetSpellRank(SpellEntry const* spellInfo) override;
 
+        bool IsLaunched() const { return m_launched; }
+        void SetLaunched(bool apply) { m_launched = apply; }
+
         WorldLocation& GetTeleportDest() { return m_teleport_dest; }
         bool IsBeingTeleported() const { return m_semaphoreTeleport_Near || m_semaphoreTeleport_Far; }
         bool IsBeingTeleportedNear() const { return m_semaphoreTeleport_Near; }
@@ -1788,6 +1795,7 @@ class Player : public Unit
 
         static Team TeamForRace(uint8 race);
         Team GetTeam() const { return m_team; }
+        PvpTeamIndex GetTeamId() const { return m_team == ALLIANCE ? TEAM_INDEX_ALLIANCE : TEAM_INDEX_HORDE; }
         static uint32 getFactionForRace(uint8 race);
         void setFactionForRace(uint8 race);
 
@@ -2552,6 +2560,8 @@ class Player : public Unit
         uint32 m_timeSyncServer;
 
         float m_energyRegenRate;
+
+        bool m_launched;
 
         std::unique_ptr<Spell> m_queuedSpell;
 

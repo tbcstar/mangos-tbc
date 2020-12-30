@@ -33,6 +33,7 @@
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 #include "Pools/PoolManager.h"
 #include "GameEvents/GameEventMgr.h"
+#include "LuaEngine.h"
 
 #include <cstdarg>
 
@@ -696,6 +697,7 @@ ChatCommand* ChatHandler::getCommandTable()
         { "flushpoints",        SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleArenaFlushPointsCommand,      "", nullptr },
         { "sendRewards",        SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleArenaSeasonRewardsCommand,    "", nullptr },
         { "resetData",          SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleArenaDataReset,               "", nullptr },
+        { "teampoints",         SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleArenaTeamPointSet,            "", nullptr },
         { nullptr,              0,                  false, nullptr,                                          "", nullptr }
     };
 
@@ -802,9 +804,18 @@ ChatCommand* ChatHandler::getCommandTable()
         { nullptr,          0,                  false, nullptr,                                        "", nullptr }
     };
 
+    static ChatCommand sunsReachReclamationTable[] =
+    {
+        { "phase",          SEC_ADMINISTRATOR,  false, &ChatHandler::HandleSunsReachReclamationPhaseCommand, "", nullptr },
+        { "subphase",       SEC_ADMINISTRATOR,  false, &ChatHandler::HandleSunsReachReclamationSubPhaseCommand, "", nullptr },
+        { "counter",        SEC_ADMINISTRATOR,  false, &ChatHandler::HandleSunsReachReclamationCounterCommand, "", nullptr },
+        { nullptr,          0,                  false, nullptr,                                        "", nullptr }
+    };
+
     static ChatCommand worldStateTable[] =
     {
         { "wareffort",      SEC_ADMINISTRATOR,  false, &ChatHandler::HandleWarEffortCommand,           "", nullptr },
+        { "sunsreach",      SEC_ADMINISTRATOR,  false, nullptr,                                        "", sunsReachReclamationTable },
         { "expansion",      SEC_ADMINISTRATOR,  false, &ChatHandler::HandleExpansionRelease,           "", nullptr },
         { nullptr,          0,                  false, nullptr,                                        "", nullptr }
     };
@@ -1379,6 +1390,8 @@ void ChatHandler::ExecuteCommand(const char* text)
         }
         case CHAT_COMMAND_UNKNOWN_SUBCOMMAND:
         {
+            if (!sEluna->OnCommand(m_session ? m_session->GetPlayer() : NULL, fullcmd.c_str()))
+                return;
             SendSysMessage(LANG_NO_SUBCMD);
             ShowHelpForCommand(command->ChildCommands, text);
             SetSentErrorMessage(true);
@@ -1386,6 +1399,8 @@ void ChatHandler::ExecuteCommand(const char* text)
         }
         case CHAT_COMMAND_UNKNOWN:
         {
+            if (!sEluna->OnCommand(m_session ? m_session->GetPlayer() : NULL, fullcmd.c_str()))
+                return;
             SendSysMessage(LANG_NO_CMD);
             SetSentErrorMessage(true);
             break;

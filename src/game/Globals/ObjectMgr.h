@@ -537,7 +537,7 @@ class ObjectMgr
         void LoadTaxiShortcuts();
         uint32 GetNearestTaxiNode(float x, float y, float z, uint32 mapid, Team team) const;
         void GetTaxiPath(uint32 source, uint32 destination, uint32& path, uint32& cost) const;
-        uint32 GetTaxiMountDisplayId(uint32 id, Team team, bool allowed_alt_team = false) const;
+        uint32 GetTaxiMountDisplayId(uint32 id, Team team) const;
 
         Quest const* GetQuestTemplate(uint32 quest_id) const
         {
@@ -1102,6 +1102,13 @@ class ObjectMgr
         void AddVendorItem(uint32 entry, uint32 item, uint32 maxcount, uint32 incrtime, uint32 extendedcost);
         bool RemoveVendorItem(uint32 entry, uint32 item);
         bool IsVendorItemValid(bool isTemplate, char const* tableName, uint32 vendor_entry, uint32 item_id, uint32 maxcount, uint32 incrtime, uint32 ExtendedCost, uint16 conditionId, Player* pl = nullptr, std::set<uint32>* skip_vendors = nullptr) const;
+
+        static void AddLocaleString(std::string const& s, LocaleConstant locale, StringVector& data);
+        static inline void GetLocaleString(const StringVector& data, int loc_idx, std::string& value)
+        {
+            if (data.size() > size_t(loc_idx) && !data[loc_idx].empty())
+                value = data[loc_idx];
+        }
 
         ItemRequiredTargetMapBounds GetItemRequiredTargetMapBounds(uint32 uiItemEntry) const
         {

@@ -41,6 +41,7 @@
 #include "Entities/Pet.h"
 #include "Social/SocialMgr.h"
 #include "GMTickets/GMTicketMgr.h"
+#include "LuaEngine.h"
 
 void WorldSession::HandleRepopRequestOpcode(WorldPacket& recv_data)
 {
@@ -61,6 +62,9 @@ void WorldSession::HandleRepopRequestOpcode(WorldPacket& recv_data)
         DEBUG_LOG("HandleRepopRequestOpcode: got request after player %s(%d) was killed and before he was updated", GetPlayer()->GetName(), GetPlayer()->GetGUIDLow());
         GetPlayer()->KillPlayer();
     }
+
+    // used by eluna
+    sEluna->OnRepop(GetPlayer());
 
     // this is spirit release confirm?
     GetPlayer()->RemovePet(PET_SAVE_REAGENTS);
@@ -766,46 +770,11 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPacket& recv_data)
     // ghost resurrected at enter attempt to dungeon with corpse (including fail enter cases)
     if (!player->IsAlive() && targetMapEntry->IsDungeon())
     {
-        uint32 corpseMapId = 0;
-        if (Corpse* corpse = player->GetCorpse())
-            corpseMapId = corpse->GetMapId();
-
-        // check back way from corpse to entrance
-        uint32 instance_map = corpseMapId;
-        do
-        {
-            // most often fast case
-            if (instance_map == targetMapEntry->MapID)
-                break;
-
-            InstanceTemplate const* instance = ObjectMgr::GetInstanceTemplate(instance_map);
-            instance_map = instance ? instance->parent : 0;
-        }
-        while (instance_map);
-
-        // corpse not in dungeon or some linked deep dungeons
-        if (!instance_map)
-        {
-            player->GetSession()->SendAreaTriggerMessage("You cannot enter %s while in a ghost mode",
-                    targetMapEntry->name[player->GetSession()->GetSessionDbcLocale()]);
-            return;
-        }
-
-        // need find areatrigger to inner dungeon for landing point
-        if (at->target_mapId != corpseMapId)
-        {
-            if (AreaTrigger const* corpseAt = sObjectMgr.GetMapEntranceTrigger(corpseMapId))
-            {
-                at = corpseAt;
-                targetMapEntry = sMapStore.LookupEntry(at->target_mapId);
-                if (!targetMapEntry)
-                    return;
-            }
-        }
-
-        // now we can resurrect player, and then check teleport requirements
-        player->ResurrectPlayer(0.5f);
-        player->SpawnCorpseBones();
+        auto data = player->CheckAndRevivePlayerOnDungeonEnter(targetMapEntry, at->target_mapId);
+		if (!data.first)
+			return;
+		if (data.second)
+			at = data.second;
     }
 
     if (at->conditionId && !sObjectMgr.IsConditionSatisfied(at->conditionId, player, player->GetMap(), nullptr, CONDITION_FROM_AREATRIGGER_TELEPORT))
