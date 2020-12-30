@@ -39,6 +39,10 @@ set(EXECUTABLE_SRCS
 if(WIN32)
   # add resource file to windows build
   set(EXECUTABLE_SRCS ${EXECUTABLE_SRCS} mangosd.rc)
+  include_directories(
+  ${CMAKE_SOURCE_DIR}/dep/lualib
+  ${CMAKE_SOURCE_DIR}/src/game/LuaEngine
+)
 endif()
 
 add_executable(${EXECUTABLE_NAME}

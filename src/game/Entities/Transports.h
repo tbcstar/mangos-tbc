@@ -88,7 +88,8 @@ class Transport : public GenericTransport
 
         static void LoadTransport(TransportTemplate const& transportTemplate, Map* map);
         bool Create(uint32 guidlow, uint32 mapid, float x, float y, float z, float ang, uint32 animprogress);
-        void Update(const uint32 diff) override;
+        //void Update(const uint32 diff) override;
+		void Update(const uint32 diff) ;
 
         uint32 GetPeriod() const { return m_period; }
         void SetPeriod(uint32 period) { m_period = period; }

@@ -25,6 +25,7 @@
 #include "Server/DBCStores.h"
 #include "AI/BaseAI/CreatureAI.h"
 #include "Maps/InstanceData.h"
+#include "LuaEngine.h"
 
 Totem::Totem() : Creature(CREATURE_SUBTYPE_TOTEM)
 {
@@ -99,6 +100,7 @@ void Totem::Summon(Unit* owner)
 
     if (owner->AI())
         owner->AI()->JustSummoned((Creature*)this);
+    sEluna->OnSummoned(this, owner);
 
     // there are some totems, which exist just for their visual appeareance
     for (uint32 spellId : m_spells)

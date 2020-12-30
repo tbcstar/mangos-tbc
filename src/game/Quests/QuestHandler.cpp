@@ -30,6 +30,7 @@
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 #include "Groups/Group.h"
 #include "Tools/Formulas.h"
+#include "LuaEngine.h"
 
 #ifdef BUILD_PLAYERBOT
 #include "PlayerBot/Base/PlayerbotAI.h"
@@ -460,6 +461,9 @@ void WorldSession::HandleQuestLogRemoveQuest(WorldPacket& recv_data)
             }
 
             _player->SetQuestStatus(quest, QUEST_STATUS_NONE);
+
+            // used by eluna
+            sEluna->OnQuestAbandon(_player, quest);
         }
 
         _player->SetQuestSlot(slot, 0);

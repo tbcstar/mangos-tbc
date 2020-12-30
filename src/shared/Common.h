@@ -138,6 +138,10 @@ enum RealmFlags
     REALM_FLAG_FULL         = 0x80
 };
 
+#define DEFAULT_LOCALE LOCALE_enUS
+
+typedef std::vector<std::string> StringVector;
+
 // operator new[] based version of strdup() function! Release memory by using operator delete[] !
 inline char* mangos_strdup(const char* source)
 {

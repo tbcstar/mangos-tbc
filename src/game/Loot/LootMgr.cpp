@@ -27,6 +27,7 @@
 #include "Server/SQLStorages.h"
 #include "Entities/ItemEnchantmentMgr.h"
 #include "Tools/Language.h"
+#include "LuaEngine.h"
 #include <sstream>
 #include <iomanip>
 
@@ -1979,6 +1980,7 @@ InventoryResult Loot::SendItem(Player* target, LootItem* lootItem, bool sendErro
                 lootItem->allowedGuid.emplace(target->GetObjectGuid());
             }
 
+			sEluna->OnLootItem(target, newItem, lootItem->count, GetLootGuid());
             playerGotItem = true;
             m_isChanged = true;
         }
@@ -2167,6 +2169,7 @@ void Loot::SendGold(Player* player)
             data << uint32(money_per_player);
 
             plr->GetSession()->SendPacket(data);
+            sEluna->OnLootMoney(plr, money_per_player);
         }
     }
     else
@@ -2178,6 +2181,7 @@ void Loot::SendGold(Player* player)
             if (Item* item = player->GetItemByGuid(m_guidTarget))
                 item->SetLootState(ITEM_LOOT_CHANGED);
         }
+        sEluna->OnLootMoney(player, m_gold);
     }
     m_gold = 0;
 

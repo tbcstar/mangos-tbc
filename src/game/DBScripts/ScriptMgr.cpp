@@ -32,6 +32,7 @@
 #include "MotionGenerators/WaypointMovementGenerator.h"
 #include "Mails/Mail.h"
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
+#include "LuaEngine.h"
 
 ScriptMapMapName sQuestEndScripts;
 ScriptMapMapName sQuestStartScripts;

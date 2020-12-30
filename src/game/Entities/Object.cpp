@@ -44,6 +44,8 @@
 #include "Loot/LootMgr.h"
 #include "Spells/SpellMgr.h"
 #include "MotionGenerators/PathFinder.h"
+#include "LuaEngine.h"
+#include "ElunaEventMgr.h"
 
 Object::Object(): m_updateFlag(0), m_itsNewObject(false)
 {
@@ -850,6 +852,14 @@ void Object::SetUInt32Value(uint16 index, uint32 value)
     }
 }
 
+void Object::UpdateUInt32Value(uint16 index, uint32 value)
+{
+    MANGOS_ASSERT(index < m_valuesCount || PrintIndexError(index, true));
+
+    m_uint32Values[index] = value;
+    m_changedValues[index] = true;
+}
+
 void Object::SetUInt64Value(uint16 index, const uint64& value)
 {
     MANGOS_ASSERT(index + 1 < m_valuesCount || PrintIndexError(index, true));
@@ -1121,6 +1131,7 @@ void Object::ForceValuesUpdateAtIndex(uint16 index)
 }
 
 WorldObject::WorldObject() :
+    elunaEvents(NULL),
     m_transportInfo(nullptr), m_isOnEventNotified(false),
     m_visibilityData(this), m_currMap(nullptr),
     m_mapId(0), m_InstanceId(0),
@@ -1128,9 +1139,20 @@ WorldObject::WorldObject() :
 {
 }
 
+WorldObject::~WorldObject()
+{
+    delete elunaEvents;
+    elunaEvents = NULL;
+}
+
 void WorldObject::CleanupsBeforeDelete()
 {
     RemoveFromWorld();
+}
+
+void WorldObject::Update(uint32 update_diff, uint32 /*time_diff*/)
+{
+    elunaEvents->Update(update_diff);
 }
 
 void WorldObject::_Create(uint32 guidlow, HighGuid guidhigh)
@@ -1270,6 +1292,14 @@ float WorldObject::GetDistance2d(float x, float y, DistanceCalculation distcalc)
     }
 }
 
+float WorldObject::GetDistance2d(const WorldObject* obj) const
+{
+	float dx = GetPositionX() - obj->GetPositionX();
+	float dy = GetPositionY() - obj->GetPositionY();
+	float sizefactor = GetObjectBoundingRadius() + obj->GetObjectBoundingRadius();
+	float dist = sqrt((dx * dx) + (dy * dy)) - sizefactor;
+	return (dist > 0 ? dist : 0);
+}
 float WorldObject::GetDistanceZ(const WorldObject* obj) const
 {
     float dz = fabs(GetPositionZ() - obj->GetPositionZ());
@@ -1854,6 +1884,17 @@ void WorldObject::SetMap(Map* map)
     // lets save current map's Id/instanceId
     m_mapId = map->GetId();
     m_InstanceId = map->GetInstanceId();
+	delete elunaEvents;
+    // On multithread replace this with a pointer to map's Eluna pointer stored in a map
+    elunaEvents = new ElunaEventProcessor(&Eluna::GEluna, this);
+}
+
+void WorldObject::ResetMap()
+{
+    delete elunaEvents;
+    elunaEvents = NULL;
+
+    m_currMap = NULL;
 }
 
 void WorldObject::AddToWorld()
@@ -2009,6 +2050,8 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map)
         if (Creature* spawnerCreature = static_cast<Creature*>(settings.spawner))
             if (UnitAI* ai = spawnerCreature->AI())
                 ai->JustSummoned(creature);
+    if (Unit* summoner = ToUnit())
+        sEluna->OnSummoned(pCreature, summoner);
 
     // Creature Linking, Initial load is handled like respawn
     if (creature->IsLinkingEventTrigger())
@@ -2061,6 +2104,36 @@ Creature* WorldObject::SpawnCreature(uint32 dbGuid, Map* map)
         return nullptr;
     }
     return creature;
+}
+
+GameObject* WorldObject::SummonGameObject(uint32 id, float x, float y, float z, float angle, uint32 despwtime)
+{
+    if (!IsInWorld())
+        return NULL;
+
+    if (!sObjectMgr.GetGameObjectInfo(id))
+    {
+        sLog.outErrorDb("WorldObject::SummonGameObject: GameObject (Entry: %u) not existed for summoner: %s. ", id, GetGuidStr().c_str());
+        return NULL;
+    }
+
+    Map *map = GetMap();
+    GameObject* pGameObj = new GameObject;
+    if (!pGameObj->Create(map->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT), id, map, x, y, z, angle))
+    {
+        delete pGameObj;
+        return NULL;
+    }
+
+    pGameObj->SetRespawnTime(despwtime / IN_MILLISECONDS);
+    if (GetTypeId() == TYPEID_PLAYER || GetTypeId() == TYPEID_UNIT)
+        ToUnit()->AddGameObject(pGameObj);
+    else
+        pGameObj->SetSpawnedByDefault(false);
+
+    map->Add(pGameObj);
+
+    return pGameObj;
 }
 
 // how much space should be left in front of/ behind a mob that already uses a space

@@ -27,7 +27,7 @@
 #include <cassert>
 #include <map>
 #include <vector>
-#include "Common.h"
+#include "../shared/Common.h"
 #include "Utilities/TypeList.h"
 #include "GameSystem/GridRefManager.h"
 

@@ -109,7 +109,7 @@ class SpellAuraHolder
         DiminishingGroup getDiminishGroup() const { return m_AuraDRGroup; }
 
         uint32 GetStackAmount() const { return m_stackAmount; }
-        void SetStackAmount(uint32 stackAmount, Unit* newCaster);
+		void SetStackAmount(uint32 stackAmount, Unit* newCaster = nullptr);
         bool ModStackAmount(int32 num, Unit* newCaster); // return true if last charge dropped
 
         Aura* GetAuraByEffectIndex(SpellEffectIndex index) const { return m_auras[index]; }

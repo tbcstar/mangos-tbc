@@ -42,7 +42,8 @@ class DynamicObject : public WorldObject
         void RemoveFromWorld() override;
 
         bool Create(uint32 guidlow, Unit* caster, uint32 spellId, SpellEffectIndex effIndex, float x, float y, float z, int32 duration, float radius, DynamicObjectType type, SpellTarget target, int32 damage, int32 basePoints);
-        void Update(const uint32 diff) override;
+        //void Update(const uint32 diff) override;
+		void Update(const uint32 diff);
         void Delete();
         uint32 GetSpellId() const { return m_spellId; }
         SpellEffectIndex GetEffIndex() const { return m_effIndex; }

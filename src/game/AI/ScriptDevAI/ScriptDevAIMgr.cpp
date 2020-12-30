@@ -12,6 +12,7 @@
 #include "system/system.h"
 #include "ScriptDevAIMgr.h"
 #include "include/sc_creature.h"
+#include "LuaEngine.h"
 
 #ifdef BUILD_SCRIPTDEV
 #include "system/ScriptLoader.h"
@@ -139,6 +140,10 @@ void Script::RegisterSelf(bool bReportError)
 
 bool ScriptDevAIMgr::OnGossipHello(Player* pPlayer, Creature* pCreature)
 {
+	// Used by Eluna
+	if (sEluna->OnGossipHello(pPlayer, pCreature))
+		return true;
+
     Script* pTempScript = GetScript(pCreature->GetScriptId());
 
     if (!pTempScript || !pTempScript->pGossipHello)
@@ -151,6 +156,10 @@ bool ScriptDevAIMgr::OnGossipHello(Player* pPlayer, Creature* pCreature)
 
 bool ScriptDevAIMgr::OnGossipHello(Player* pPlayer, GameObject* pGo)
 {
+	// Used by Eluna
+	if (sEluna->OnGossipHello(pPlayer, pGo))
+		return true;
+
     Script* pTempScript = GetScript(pGo->GetGOInfo()->ScriptId);
 
     if (!pTempScript || !pTempScript->pGossipHelloGO)
@@ -163,6 +172,19 @@ bool ScriptDevAIMgr::OnGossipHello(Player* pPlayer, GameObject* pGo)
 
 bool ScriptDevAIMgr::OnGossipSelect(Player* pPlayer, Creature* pCreature, uint32 uiSender, uint32 uiAction, const char* code)
 {
+	if (code)
+	{
+		// Used by Eluna
+		if (sEluna->OnGossipSelectCode(pPlayer, pCreature, uiSender, uiAction, code))
+			return true;
+	}
+	else
+	{
+		// Used by Eluna
+		if (sEluna->OnGossipSelect(pPlayer, pCreature, uiSender, uiAction))
+			return true;
+	}
+
     debug_log("SD2: Gossip selection, sender: %u, action: %u", uiSender, uiAction);
 
     Script* pTempScript = GetScript(pCreature->GetScriptId());
@@ -188,6 +210,17 @@ bool ScriptDevAIMgr::OnGossipSelect(Player* pPlayer, Creature* pCreature, uint32
 
 bool ScriptDevAIMgr::OnGossipSelect(Player* pPlayer, GameObject* pGo, uint32 uiSender, uint32 uiAction, const char* code)
 {
+	if (code)
+	{
+		if (sEluna->OnGossipSelectCode(pPlayer, pGo, uiSender, uiAction, code))
+			return true;
+	}
+	else
+	{
+		if (sEluna->OnGossipSelect(pPlayer, pGo, uiSender, uiAction))
+			return true;
+	}
+
     debug_log("SD2: GO Gossip selection, sender: %u, action: %u", uiSender, uiAction);
 
     Script* pTempScript = GetScript(pGo->GetGOInfo()->ScriptId);
@@ -213,6 +246,9 @@ bool ScriptDevAIMgr::OnGossipSelect(Player* pPlayer, GameObject* pGo, uint32 uiS
 
 uint32 ScriptDevAIMgr::GetDialogStatus(const Player* pPlayer, const Creature* pCreature) const
 {
+	// Used by Eluna
+	sEluna->GetDialogStatus(pPlayer, pCreature);
+
     Script* pTempScript = GetScript(pCreature->GetScriptId());
 
     if (!pTempScript || !pTempScript->pDialogStatusNPC)
@@ -225,6 +261,9 @@ uint32 ScriptDevAIMgr::GetDialogStatus(const Player* pPlayer, const Creature* pC
 
 uint32 ScriptDevAIMgr::GetDialogStatus(const Player* pPlayer, const GameObject* pGo) const
 {
+	// Used by Eluna
+	sEluna->GetDialogStatus(pPlayer, pGo);
+
     Script* pTempScript = GetScript(pGo->GetGOInfo()->ScriptId);
 
     if (!pTempScript || !pTempScript->pDialogStatusGO)
@@ -237,6 +276,10 @@ uint32 ScriptDevAIMgr::GetDialogStatus(const Player* pPlayer, const GameObject* 
 
 bool ScriptDevAIMgr::OnQuestAccept(Player* pPlayer, Creature* pCreature, const Quest* pQuest)
 {
+	// Used by Eluna
+	if (sEluna->OnQuestAccept(pPlayer, pCreature, pQuest))
+		return true;
+
     Script* pTempScript = GetScript(pCreature->GetScriptId());
 
     if (!pTempScript || !pTempScript->pQuestAcceptNPC)
@@ -249,6 +292,10 @@ bool ScriptDevAIMgr::OnQuestAccept(Player* pPlayer, Creature* pCreature, const Q
 
 bool ScriptDevAIMgr::OnQuestAccept(Player* pPlayer, GameObject* pGo, const Quest* pQuest)
 {
+	// Used by Eluna
+	if (sEluna->OnQuestAccept(pPlayer, pGo, pQuest))
+		return true;
+
     Script* pTempScript = GetScript(pGo->GetGOInfo()->ScriptId);
 
     if (!pTempScript || !pTempScript->pQuestAcceptGO)
@@ -261,6 +308,10 @@ bool ScriptDevAIMgr::OnQuestAccept(Player* pPlayer, GameObject* pGo, const Quest
 
 bool ScriptDevAIMgr::OnQuestAccept(Player* pPlayer, Item* pItem, Quest const* pQuest)
 {
+	// Used by Eluna
+	if (sEluna->OnQuestAccept(pPlayer, pItem, pQuest))
+		return true;
+
     Script* pTempScript = GetScript(pItem->GetProto()->ScriptId);
 
     if (!pTempScript || !pTempScript->pQuestAcceptItem)
@@ -273,6 +324,9 @@ bool ScriptDevAIMgr::OnQuestAccept(Player* pPlayer, Item* pItem, Quest const* pQ
 
 bool ScriptDevAIMgr::OnGameObjectUse(Player* pPlayer, GameObject* pGo)
 {
+	if (sEluna->OnGameObjectUse(pPlayer, pGo))
+		return true;
+
     Script* pTempScript = GetScript(pGo->GetGOInfo()->ScriptId);
 
     if (!pTempScript || !pTempScript->pGOUse)
@@ -291,8 +345,12 @@ std::function<bool(Unit*)>* ScriptDevAIMgr::OnTrapSearch(GameObject* go)
     return pTempScript->pTrapSearching;
 }
 
-bool ScriptDevAIMgr::OnQuestRewarded(Player* pPlayer, Creature* pCreature, Quest const* pQuest)
+bool ScriptDevAIMgr::OnQuestRewarded(Player* pPlayer, Creature* pCreature, Quest const* pQuest, uint32 reward)
 {
+	// Used by Eluna
+	if (sEluna->OnQuestReward(pPlayer, pCreature, pQuest, reward))
+		return true;
+
     Script* pTempScript = GetScript(pCreature->GetScriptId());
 
     if (!pTempScript || !pTempScript->pQuestRewardedNPC)
@@ -303,8 +361,12 @@ bool ScriptDevAIMgr::OnQuestRewarded(Player* pPlayer, Creature* pCreature, Quest
     return pTempScript->pQuestRewardedNPC(pPlayer, pCreature, pQuest);
 }
 
-bool ScriptDevAIMgr::OnQuestRewarded(Player* pPlayer, GameObject* pGo, Quest const* pQuest)
+bool ScriptDevAIMgr::OnQuestRewarded(Player* pPlayer, GameObject* pGo, Quest const* pQuest, uint32 reward)
 {
+	// Used by Eluna
+	if (sEluna->OnQuestReward(pPlayer, pGo, pQuest, reward))
+		return true;
+
     Script* pTempScript = GetScript(pGo->GetGOInfo()->ScriptId);
 
     if (!pTempScript || !pTempScript->pQuestRewardedGO)
@@ -317,6 +379,10 @@ bool ScriptDevAIMgr::OnQuestRewarded(Player* pPlayer, GameObject* pGo, Quest con
 
 bool ScriptDevAIMgr::OnAreaTrigger(Player* pPlayer, AreaTriggerEntry const* atEntry)
 {
+	// Used by Eluna
+	if (sEluna->OnAreaTrigger(pPlayer, atEntry))
+		return true;
+
     Script* pTempScript = GetScript(GetAreaTriggerScriptId(atEntry->id));
 
     if (!pTempScript || !pTempScript->pAreaTrigger)
@@ -338,6 +404,10 @@ bool ScriptDevAIMgr::OnProcessEvent(uint32 uiEventId, Object* pSource, Object* p
 
 UnitAI* ScriptDevAIMgr::GetCreatureAI(Creature* pCreature) const
 {
+	// Used by Eluna
+	if (UnitAI* luaAI = sEluna->GetAI(pCreature))
+		return luaAI;
+
     Script* pTempScript = GetScript(pCreature->GetScriptId());
 
     if (!pTempScript || !pTempScript->GetAI)
@@ -358,6 +428,9 @@ GameObjectAI* ScriptDevAIMgr::GetGameObjectAI(GameObject* gameobject) const
 
 bool ScriptDevAIMgr::OnItemUse(Player* pPlayer, Item* pItem, SpellCastTargets const& targets)
 {
+	if (!sEluna->OnUse(pPlayer, pItem, targets))
+		return true;
+
     Script* pTempScript = GetScript(pItem->GetProto()->ScriptId);
 
     if (!pTempScript || !pTempScript->pItemUse)
@@ -378,6 +451,11 @@ bool ScriptDevAIMgr::OnItemLoot(Player* pPlayer, Item* pItem, bool apply)
 
 bool ScriptDevAIMgr::OnEffectDummy(Unit* pCaster, uint32 spellId, SpellEffectIndex effIndex, Creature* pTarget, ObjectGuid originalCasterGuid)
 {
+	// Used by Eluna
+	if (pTarget->ToCreature())
+		if (sEluna->OnDummyEffect(pCaster, spellId, effIndex, pTarget->ToCreature()))
+			return true;
+
     Script* pTempScript = GetScript(pTarget->GetScriptId());
 
     if (!pTempScript || !pTempScript->pEffectDummyNPC)
@@ -388,6 +466,10 @@ bool ScriptDevAIMgr::OnEffectDummy(Unit* pCaster, uint32 spellId, SpellEffectInd
 
 bool ScriptDevAIMgr::OnEffectDummy(Unit* pCaster, uint32 spellId, SpellEffectIndex effIndex, GameObject* pTarget, ObjectGuid originalCasterGuid)
 {
+	// Used by Eluna
+	if (sEluna->OnDummyEffect(pCaster, spellId, effIndex, pTarget))
+		return true;
+
     Script* pTempScript = GetScript(pTarget->GetGOInfo()->ScriptId);
 
     if (!pTempScript || !pTempScript->pEffectDummyGO)
@@ -398,6 +480,10 @@ bool ScriptDevAIMgr::OnEffectDummy(Unit* pCaster, uint32 spellId, SpellEffectInd
 
 bool ScriptDevAIMgr::OnEffectDummy(Unit* pCaster, uint32 spellId, SpellEffectIndex effIndex, Item* pTarget, ObjectGuid originalCasterGuid)
 {
+	// Used by Eluna
+	if (sEluna->OnDummyEffect(pCaster, spellId, effIndex, pTarget))
+		return true;
+
     Script* pTempScript = GetScript(pTarget->GetProto()->ScriptId);
 
     if (!pTempScript || !pTempScript->pEffectDummyItem)

@@ -44,6 +44,7 @@
 #include <G3D/CoordinateFrame.h>
 #include <G3D/Quat.h>
 #include "Entities/Transports.h"
+#include "LuaEngine.h"
 
 bool QuaternionData::isUnit() const
 {
@@ -116,6 +117,8 @@ GameObject* GameObject::CreateGameObject(uint32 entry)
 
 void GameObject::AddToWorld()
 {
+    bool inWorld = IsInWorld();
+
     ///- Register the gameobject for guid lookup
     if (!IsInWorld())
         GetMap()->GetObjectsStore().insert<GameObject>(GetObjectGuid(), (GameObject*)this);
@@ -132,6 +135,9 @@ void GameObject::AddToWorld()
     {
         if (GameObject* linkedGO = SummonLinkedTrapIfAny())
             SetLinkedTrap(linkedGO);
+
+		if (!inWorld)
+			sEluna->OnAddToWorld(this);
 
         if (InstanceData* iData = GetMap()->GetInstanceData())
             iData->OnObjectSpawn(this);
@@ -150,6 +156,8 @@ void GameObject::RemoveFromWorld()
     ///- Remove the gameobject from the accessor
     if (IsInWorld())
     {
+        sEluna->OnRemoveFromWorld(this);
+
         // Notify the outdoor pvp script
         if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(GetZoneId()))
             outdoorPvP->HandleGameObjectRemove(this);
@@ -173,6 +181,11 @@ void GameObject::RemoveFromWorld()
     }
 
     WorldObject::RemoveFromWorld();
+}
+
+void GameObject::CleanupsBeforeDelete()
+{
+    WorldObject::CleanupsBeforeDelete();
 }
 
 bool GameObject::Create(uint32 guidlow, uint32 name_id, Map* map, float x, float y, float z, float ang, float rotation0, float rotation1, float rotation2, float rotation3, uint32 animprogress, GOState go_state)
@@ -261,6 +274,8 @@ bool GameObject::Create(uint32 guidlow, uint32 name_id, Map* map, float x, float
             break;
     }
 
+    sEluna->OnSpawn(this);
+
     // Notify the battleground or outdoor pvp script
     if (map->IsBattleGroundOrArena())
         ((BattleGroundMap*)map)->GetBG()->HandleGameObjectCreate(this);
@@ -287,6 +302,9 @@ void GameObject::Update(const uint32 diff)
         //((Transport*)this)->Update(p_time);
         return;
     }
+
+    // used by eluna
+    sEluna->UpdateAI(this, diff);
 
     switch (m_lootState)
     {
@@ -1906,6 +1924,7 @@ void GameObject::UpdateRotationFields(float rotation2 /*=0.0f*/, float rotation3
 void GameObject::SetLootState(LootState state)
 {
     m_lootState = state;
+    sEluna->OnLootStateChanged(this, state);
     UpdateCollisionState();
 
     // Call for GameObjectAI script
@@ -1916,6 +1935,7 @@ void GameObject::SetLootState(LootState state)
 void GameObject::SetGoState(GOState state)
 {
     SetByteValue(GAMEOBJECT_STATE, 0, state);
+    sEluna->OnGameObjectStateChanged(this, state);
     UpdateCollisionState();
 }
 

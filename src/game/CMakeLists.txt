@@ -76,6 +76,7 @@ target_link_libraries(${LIBRARY_NAME}
   PRIVATE g3dlite
   PRIVATE detour
   PRIVATE ${ZLIB_LIBRARIES}
+  PRIVATE lualib
 )
 
 # include additionals headers
@@ -84,8 +85,10 @@ set(ADDITIONAL_INCLUDE_DIRS
   ${CMAKE_CURRENT_SOURCE_DIR}/vmap
   ${CMAKE_CURRENT_SOURCE_DIR}/AuctionHouseBot
   ${CMAKE_CURRENT_SOURCE_DIR}/BattleGround
+  ${CMAKE_CURRENT_SOURCE_DIR}/LuaEngine
   ${CMAKE_CURRENT_SOURCE_DIR}/OutdoorPvP
   ${CMAKE_CURRENT_SOURCE_DIR}/PlayerBot
+  ${CMAKE_SOURCE_DIR}/dep/lualib
   ${CMAKE_BINARY_DIR}
 )
 
@@ -95,6 +98,14 @@ target_include_directories(${LIBRARY_NAME}
   PRIVATE ${Boost_INCLUDE_DIRS}
 )
 
+file(GLOB SRC_FILES_LUAENGINE LuaEngine/*.cpp LuaEngine/*.h)
+set(SRC_GRP_LUAENGINE
+    ${SRC_FILES_LUAENGINE}
+)
+source_group("LuaEngine"
+  FILES
+    ${SRC_GRP_LUAENGINE}
+)
 if(UNIX)
   # Both systems don't have libdl and don't need them
   if (NOT (CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "NetBSD"))
@@ -127,4 +138,7 @@ if(PCH)
   target_precompile_headers(${LIBRARY_NAME} PRIVATE "${PCH_FILE_HEADER}")
 endif()
 
+add_dependencies(${LIBRARY_NAME} lualib)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/PlayerBot/playerbot.conf.dist.in DESTINATION ${CONF_DIR} RENAME playerbot.conf.dist)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/LuaEngine/extensions DESTINATION ${BIN_DIR}/lua_scripts/)

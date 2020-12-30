@@ -26,6 +26,7 @@
 #include "AI/BaseAI/GameObjectAI.h"
 #include "Spells/SpellAuras.h"
 #include "Spells/SpellDefines.h"
+#include "Utilities/EventProcessor.h"
 
 // GCC have alternative #pragma pack(N) syntax and old gcc version not support pack(push,N), also any gcc version not support it at some platform
 #if defined( __GNUC__ )
@@ -687,9 +688,12 @@ class GameObject : public WorldObject
         void AddToWorld() override;
         void RemoveFromWorld() override;
 
+        void CleanupsBeforeDelete() override;
+
         virtual bool Create(uint32 guidlow, uint32 name_id, Map* map, float x, float y, float z, float ang,
                     float rotation0 = 0.0f, float rotation1 = 0.0f, float rotation2 = 0.0f, float rotation3 = 0.0f, uint32 animprogress = GO_ANIMPROGRESS_DEFAULT, GOState go_state = GO_STATE_READY);
-        void Update(const uint32 diff) override;
+        //void Update(const uint32 diff) override;
+		void Update(const uint32 diff);
         GameObjectInfo const* GetGOInfo() const;
 
         bool IsTransport() const;
@@ -743,6 +747,7 @@ class GameObject : public WorldObject
                    (m_respawnTime == 0 && m_spawnedByDefault);
         }
         bool IsSpawnedByDefault() const { return m_spawnedByDefault; }
+		void SetSpawnedByDefault(bool b) { m_spawnedByDefault = b; }
         uint32 GetRespawnDelay() const { return m_respawnDelay; }
         void SetRespawnDelay(uint32 delay, bool once = false) { m_respawnDelay = delay; m_respawnOverriden = true; m_respawnOverrideOnce = once; }
         void SetForcedDespawn() { m_forcedDespawn = true; };

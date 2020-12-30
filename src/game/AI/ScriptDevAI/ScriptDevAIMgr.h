@@ -147,8 +147,8 @@ class ScriptDevAIMgr
         bool OnQuestAccept(Player* pPlayer, Creature* pCreature, Quest const* pQuest);
         bool OnQuestAccept(Player* pPlayer, GameObject* pGo, Quest const* pQuest);
         bool OnQuestAccept(Player* pPlayer, Item* pItem, Quest const* pQuest);
-        bool OnQuestRewarded(Player* pPlayer, Creature* pCreature, Quest const* pQuest);
-        bool OnQuestRewarded(Player* pPlayer, GameObject* pGo, Quest const* pQuest);
+        bool OnQuestRewarded(Player* pPlayer, Creature* pCreature, Quest const* pQuest, uint32 reward = 0);
+        bool OnQuestRewarded(Player* pPlayer, GameObject* pGo, Quest const* pQuest, uint32 reward = 0);
         uint32 GetDialogStatus(const Player* pPlayer, const Creature* pCreature) const;
         uint32 GetDialogStatus(const Player* pPlayer, const GameObject* pGo) const;
         bool OnGameObjectUse(Player* pPlayer, GameObject* pGo);
